@@ -122,8 +122,12 @@ function shouldResume() {
 async function mediaStream(node: OrbitNode, q: string, episode?: Episode | null) {
   const omsId = episode?.omsItemId || node.omsItemId;
   if (omsId) {
-    const { omsStreamUrl } = await import('../lib/importLibraryFromOms');
-    return { mode: 'direct', url: omsStreamUrl(omsId), fallbackUrl: null };
+    const { omsStreamUrl, omsTranscodeUrl } = await import('../lib/importLibraryFromOms');
+    return {
+      mode: 'direct',
+      url: omsStreamUrl(omsId),
+      fallbackUrl: omsTranscodeUrl(omsId),
+    };
   }
   try {
     if (Plex.connected && (node.partKey || node.plexKey)) return await Plex.resolveStream(node, q || 'auto');
@@ -334,6 +338,7 @@ export function VideoPlayer({
         playNodeRef.current = node;
         setPlayNode(node);
         streamModeRef.current = 'direct';
+        streamFallback.current = info.fallbackUrl || null;
         setStreamUrl(info.url);
         return;
       }
@@ -464,7 +469,7 @@ export function VideoPlayer({
       onFatalError: () => onStreamFailRef.current(),
     });
 
-    const stallMs = streamUrl.includes('.m3u8') ? 50000 : 22000;
+    const stallMs = streamUrl.includes('.m3u8') ? 45000 : streamFallback.current ? 2500 : 12000;
     const stallTimer = window.setTimeout(() => {
       if (!v.error && v.currentTime < 0.5 && v.readyState < 2) onStreamFailRef.current();
     }, stallMs);
@@ -511,7 +516,7 @@ export function VideoPlayer({
       if (loadSettings().playback.autoPlayNext && onPlayNext) onPlayNext();
     };
     const onErr = () => {
-      if (Plex.connected && !triedFallback.current && streamFallback.current) {
+      if (!triedFallback.current && streamFallback.current) {
         onStreamFailRef.current();
         return;
       }
@@ -575,10 +580,10 @@ export function VideoPlayer({
         setReady(false);
         setStreamUrl(fb);
       }
-    }, 7000);
+    }, 2000);
 
     const audioWatchdog = window.setTimeout(() => {
-      if (cancelled || v.paused || v.currentTime < 2) return;
+      if (cancelled || v.paused || v.currentTime < 1) return;
       if (!muted && vol > 0 && !videoHasDecodedAudio(v) && streamFallback.current) {
         triedFallback.current = true;
         streamModeRef.current = 'transcode';
@@ -588,7 +593,7 @@ export function VideoPlayer({
         setReady(false);
         setStreamUrl(fb);
       }
-    }, 3500);
+    }, 1200);
 
     return () => {
       cancelled = true;

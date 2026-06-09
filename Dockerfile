@@ -13,7 +13,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8090
 
-RUN apk add --no-cache su-exec
+RUN apk add --no-cache su-exec ffmpeg
 
 # /app must be writable by node for npm ci; avoid recursive chown over node_modules
 RUN chown node:node /app

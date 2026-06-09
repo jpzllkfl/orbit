@@ -9,6 +9,7 @@ import { listItems, scanLibrary } from './scanner.js';
 import { DEFAULT_OMS_LIBRARIES } from './catalog.js';
 import { scanAllLibraries, seedDefaultLibraries } from './seed.js';
 import { streamMediaItem } from './stream.js';
+import { ensureOmsTranscode, serveTranscodeFile } from './transcode.js';
 
 export function createMediaRouter() {
   const router = Router();
@@ -107,6 +108,15 @@ export function createMediaRouter() {
       streamMediaItem(req, res, req.params.id);
     } catch (e) {
       if (!res.headersSent) res.status(500).json({ error: e.message || 'Stream failed.' });
+    }
+  });
+
+  router.get('/transcode/:id/:file', async (req, res) => {
+    try {
+      await ensureOmsTranscode(req.params.id);
+      serveTranscodeFile(req.params.id, req.params.file, res);
+    } catch (e) {
+      if (!res.headersSent) res.status(500).json({ error: e.message || 'Transcode failed.' });
     }
   });
 

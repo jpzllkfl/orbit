@@ -762,7 +762,6 @@ window.OrbitPlex = (function () {
     const settingsMaxQ = prefs.quality && prefs.quality !== 'auto' ? parseInt(prefs.quality, 10) || 1080 : 1080;
     const qNum = forcedQ || settingsMaxQ;
     const tryDirect = !forcedQ && prefs.preferDirectPlay !== false;
-    const webPlayer = typeof window !== 'undefined' && !window.orbitNative;
 
     const hlsFor = (offset) => transcodeUrl(meta, {
       session,
@@ -772,13 +771,14 @@ window.OrbitPlex = (function () {
       offset,
     });
 
-    // Browser Auto: skip MDE/direct play — HLS transcode starts reliably (local, Docker, Cloudflare).
-    if (quality === 'auto' && webPlayer) {
-      const hls = hlsFor(0);
-      const directUrl = meta.partKey && canDirectPlayInBrowser(meta) ? directPlayUrl(meta) : null;
-      if (hls) return { mode: 'transcode', url: hls, fallbackUrl: directUrl };
+    const hls = hlsFor(0);
+    const directUrl = meta.partKey ? directPlayUrl(meta) : null;
+    const browserOk = meta.partKey && canDirectPlayInBrowser(meta);
+
+    // Auto + prefer direct: try direct play first, HLS transcode as fast fallback.
+    if (quality === 'auto' && tryDirect && browserOk && directUrl) {
+      return { mode: 'direct', url: directUrl, fallbackUrl: hls || null };
     }
-    const browserDirect = meta.partKey && canDirectPlayInBrowser(meta) ? directPlayUrl(meta) : null;
 
     const decisionOpts = {
       session,
@@ -794,35 +794,30 @@ window.OrbitPlex = (function () {
       const params = buildPlaybackParams(meta, { ...decisionOpts, hasMDE: true });
       const xml = await Promise.race([
         fetchRaw('/video/:/transcode/universal/decision?' + params),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('MDE timeout')), 12000)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('MDE timeout')), 3000)),
       ]);
       const decision = parseDecisionFull(xml);
       if (decision.partKey && !meta.partKey) meta = { ...meta, partKey: decision.partKey };
       if (decision.videoCodec) meta = { ...meta, videoCodec: decision.videoCodec };
       if (decision.audioCodec) meta = { ...meta, audioCodec: decision.audioCodec };
 
-      const hls = hlsFor(0);
-      const directUrl = meta.partKey ? directPlayUrl(meta) : null;
+      const refreshedDirect = meta.partKey ? directPlayUrl(meta) : null;
+      const refreshedBrowserOk = meta.partKey && canDirectPlayInBrowser(meta);
       const canDirect = tryDirect && (decision.code === 1001 || decision.code === 1002);
-      const browserOk = meta.partKey && canDirectPlayInBrowser(meta);
-      // In the web player, Auto prefers Plex HLS transcode — direct play often hangs on remux/remote files.
-      const transcodeFirst = quality === 'auto' && webPlayer && !!hls;
 
-      if (transcodeFirst) {
-        return { mode: 'transcode', url: hls, fallbackUrl: browserOk ? directUrl : null };
-      }
-
-      if (canDirect && browserOk) {
-        return { mode: 'direct', url: directUrl, fallbackUrl: hls || null };
+      if (canDirect && refreshedBrowserOk && refreshedDirect) {
+        return { mode: 'direct', url: refreshedDirect, fallbackUrl: hls || null };
       }
 
       return hls
-        ? { mode: 'transcode', url: hls, fallbackUrl: browserOk ? directUrl : null }
+        ? { mode: 'transcode', url: hls, fallbackUrl: refreshedBrowserOk ? refreshedDirect : null }
         : { mode: 'none', url: null, fallbackUrl: null };
     } catch (e) {
-      const hls = hlsFor(0);
+      if (tryDirect && browserOk && directUrl) {
+        return { mode: 'direct', url: directUrl, fallbackUrl: hls || null };
+      }
       return hls
-        ? { mode: 'transcode', url: hls, fallbackUrl: browserDirect }
+        ? { mode: 'transcode', url: hls, fallbackUrl: browserOk ? directUrl : null }
         : { mode: 'none', url: null, fallbackUrl: null };
     }
   }

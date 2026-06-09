@@ -44,6 +44,10 @@ export function omsStreamUrl(itemId: string): string {
   return '/api/media/stream/' + encodeURIComponent(itemId);
 }
 
+export function omsTranscodeUrl(itemId: string): string {
+  return '/api/media/transcode/' + encodeURIComponent(itemId) + '/stream.m3u8';
+}
+
 export function nodeHasOmsPlayback(node: OrbitNode): boolean {
   return !!(node.omsItemId || node.omsPath);
 }
