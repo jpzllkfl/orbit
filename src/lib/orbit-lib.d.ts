@@ -48,6 +48,7 @@ export interface OrbitLib {
   tpdbSearchUrl(node: OrbitNode): Promise<string | null>;
   resolveArtUrl(url: string): Promise<string[]>;
   refreshServerTmdb(): Promise<void>;
+  ensureTmdbReady(): Promise<void>;
   readonly serverTmdb: boolean;
   fetchDetails(node: OrbitNode): Promise<{
     overview?: string;

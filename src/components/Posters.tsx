@@ -217,7 +217,6 @@ export function useArt(node: OrbitNode, overrideId?: string, enabled = true, car
       setArt(cached);
       return;
     }
-    if (Plex.connected && node.plexKey) return;
     Lib.resolve(node).then((r) => {
       if (alive) setArt(r || null);
     });
@@ -253,6 +252,10 @@ export function SmartPoster({ node, showTitle = true }: { node: OrbitNode; showT
   }, [node.id]);
   const art = useArt(node, undefined, visible, true);
   const poster = art?.poster;
+  const [fallbackPoster, setFallbackPoster] = useState<string | null>(null);
+  useEffect(() => {
+    setFallbackPoster(null);
+  }, [node.id]);
   useEffect(() => {
     setSrc(null);
     setLoaded(false);
@@ -260,7 +263,8 @@ export function SmartPoster({ node, showTitle = true }: { node: OrbitNode; showT
       releaseImageSlot();
       slotHeld.current = false;
     }
-    if (!visible || !poster) return;
+    const url = fallbackPoster || poster;
+    if (!visible || !url) return;
     let cancelled = false;
     acquireImageSlot().then(() => {
       if (cancelled) {
@@ -268,12 +272,12 @@ export function SmartPoster({ node, showTitle = true }: { node: OrbitNode; showT
         return;
       }
       slotHeld.current = true;
-      setSrc(hiResPoster(poster) || poster);
+      setSrc(hiResPoster(url) || url);
     });
     return () => {
       cancelled = true;
     };
-  }, [visible, poster, node.id]);
+  }, [visible, poster, fallbackPoster, node.id]);
   const typeLabel = node.type === 'show' ? 'SERIES' : 'FILM';
   const finishLoad = () => {
     setLoaded(true);
@@ -294,7 +298,16 @@ export function SmartPoster({ node, showTitle = true }: { node: OrbitNode; showT
           decoding="async"
           fetchPriority="low"
           onLoad={finishLoad}
-          onError={finishLoad}
+          onError={() => {
+            if (!fallbackPoster) {
+              Lib.resolveTmdb(node).then((r) => {
+                if (r?.poster) setFallbackPoster(r.poster);
+                else finishLoad();
+              });
+            } else {
+              finishLoad();
+            }
+          }}
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: loaded ? 1 : 0, transition: 'opacity .12s' }}
         />
       )}

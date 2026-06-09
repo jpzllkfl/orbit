@@ -1,9 +1,11 @@
 /* ============ ORBIT — data layer ============
    Resolves titles to real artwork + metadata via TMDB, and powers Smart Add
    (live search for titles AND franchise collections).
-   - Bring-your-own free API key (v3 key or v4 read token), stored locally.
+   - Server TMDB key (ORBIT_TMDB_API_KEY) — no user setup required.
    - Resolved art cached in localStorage so reloads are instant.
-   - No key / no match / offline → callers fall back to generated key-art. */
+   - No match / offline → callers fall back to generated key-art. */
+import { apiUrl } from './orbitServer.ts';
+
 window.OrbitLib = (function () {
   const KEY_LS = 'orbit.tmdb.key';
   const CONN_LS = 'orbit.conn.v1';
@@ -11,14 +13,7 @@ window.OrbitLib = (function () {
 
   let key = '';
   let serverTmdb = false;
-
-  function orbitApiBase() {
-    try {
-      const home = localStorage.getItem('orbit.server.home.v1');
-      if (home) return home.replace(/\/+$/, '');
-    } catch (e) { /* ignore */ }
-    return typeof location !== 'undefined' ? location.origin : '';
-  }
+  let serverTmdbPromise = null;
 
   function tmdbReady() {
     loadKey();
@@ -27,14 +22,19 @@ window.OrbitLib = (function () {
 
   async function refreshServerTmdb() {
     try {
-      const r = await fetch(orbitApiBase() + '/api/tmdb/status');
+      const r = await fetch(apiUrl('/api/tmdb/status'), { signal: AbortSignal.timeout(8000) });
       if (!r.ok) return;
       const j = await r.json();
       serverTmdb = !!j.available;
       notify();
-    } catch (e) { /* offline */ }
+    } catch (e) { /* offline / wrong home */ }
   }
-  refreshServerTmdb();
+
+  function ensureTmdbReady() {
+    if (!serverTmdbPromise) serverTmdbPromise = refreshServerTmdb();
+    return serverTmdbPromise;
+  }
+  ensureTmdbReady();
 
   function mirrorConnKey() {
     try {
@@ -84,7 +84,7 @@ window.OrbitLib = (function () {
   const inflight = new Map();
   const resolveQueue = [];
   let resolveActive = 0;
-  const RESOLVE_MAX = 3;
+  const RESOLVE_MAX = 8;
 
   function plexPosterFor(node) {
     const Plex = window.OrbitPlex;
@@ -153,8 +153,8 @@ window.OrbitLib = (function () {
   function imgUrl(path, size) { return path ? 'https://image.tmdb.org/t/p/' + (size || 'w500') + path : null; }
 
   async function apiGet(path, params) {
-    if (!tmdbReady()) throw new Error('TMDB not available');
-    const u = new URL(orbitApiBase() + '/api/tmdb/proxy');
+    await ensureTmdbReady();
+    const u = new URL(apiUrl('/api/tmdb/proxy'));
     u.searchParams.set('path', path);
     Object.entries(params || {}).forEach(([k, v]) => { if (v != null && v !== '') u.searchParams.set(k, v); });
     if (!params || params.language == null) u.searchParams.set('language', 'en-US');
@@ -166,7 +166,7 @@ window.OrbitLib = (function () {
   }
 
   async function artApi(path, params) {
-    const u = new URL(orbitApiBase() + '/api/art' + path);
+    const u = new URL(apiUrl('/api/art' + path));
     Object.entries(params || {}).forEach(([k, v]) => { if (v != null && v !== '') u.searchParams.set(k, v); });
     const headers = {};
     if (key) headers['X-Orbit-Tmdb-Key'] = key;
@@ -214,10 +214,25 @@ window.OrbitLib = (function () {
       saveCache();
       return data;
     }
-    if (!tmdbReady()) return null;
     if (inflight.has(k)) return inflight.get(k);
     const p = enqueueResolve(async () => {
       try {
+        await ensureTmdbReady();
+        if (node.tmdbId) {
+          const kind = node.type === 'show' ? 'tv' : 'movie';
+          const j = await apiGet('/' + kind + '/' + node.tmdbId);
+          const data = {
+            poster: imgUrl(j.poster_path, 'w500'),
+            backdrop: imgUrl(j.backdrop_path, 'w1280'),
+            overview: j.overview || '',
+            rating: j.vote_average ? Math.round(j.vote_average * 10) / 10 : null,
+            tmdbId: node.tmdbId,
+          };
+          if (data.poster || data.backdrop) {
+            cache[k] = data; saveCache();
+            return data;
+          }
+        }
         const kind = node.type === 'show' ? 'tv' : 'movie';
         const params = { query: node.title, include_adult: false };
         if (node.year) params[kind === 'tv' ? 'first_air_date_year' : 'year'] = node.year;
@@ -329,19 +344,19 @@ window.OrbitLib = (function () {
 
   // alternate official posters/backdrops for a node (for the art picker)
   async function fetchImages(node) {
-    if (!tmdbReady() || !node) return null;
+    if (!node) return null;
     try {
+      await ensureTmdbReady();
       if (node.type === 'collection' || node.type === 'library') {
         return await fetchCollectionImages(node);
       }
-      let id = node.tmdbId || (getCached(node) || {}).tmdbId;
-      if (!id) { const r = await resolve(node); id = r && r.tmdbId; }
+      const id = node.tmdbId || (getCached(node) || {}).tmdbId || '';
       const kind = node.type === 'show' ? 'tv' : 'movie';
       const j = await artApi('/images', {
         kind,
         title: node.title,
         year: node.year || '',
-        tmdbId: id || '',
+        tmdbId: id,
       });
       return {
         posters: j.posters || [],
@@ -351,7 +366,7 @@ window.OrbitLib = (function () {
   }
 
   async function fetchCollectionImages(node) {
-    if (!tmdbReady() || !node) return null;
+    if (!node) return null;
     try {
       const j = await artApi('/collection-images', { title: node.title });
       return { posters: j.posters || [], backdrops: j.backdrops || [] };
@@ -371,7 +386,7 @@ window.OrbitLib = (function () {
 
   async function resolveArtUrl(url) {
     try {
-      const res = await fetch(orbitApiBase() + '/api/art/resolve-url', {
+      const res = await fetch(apiUrl('/api/art/resolve-url'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
@@ -485,7 +500,7 @@ window.OrbitLib = (function () {
   return {
     resolve, resolveTmdb, resolveLogo, trending, getCached, seed, setKey, onChange, clearCache, imgUrl,
     searchTitles, searchCollections, collectionParts, fetchImages, fetchCollectionImages, fetchDetails, fetchShowSeasons, fetchSeasonEpisodes,
-    tpdbSearchUrl, resolveArtUrl, refreshServerTmdb,
+    tpdbSearchUrl, resolveArtUrl, refreshServerTmdb, ensureTmdbReady,
     getOverride, setOverride, clearOverride,
     loadKey, reloadFromStorage,
     get connected() { loadKey(); return tmdbReady(); },

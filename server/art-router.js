@@ -2,6 +2,18 @@ import { Router } from 'express';
 import { resolveTmdbKey, tmdbAuthHeaders, withTmdbKey } from './tmdb-config.js';
 
 const TMDB = 'https://api.themoviedb.org/3';
+const cache = new Map();
+const CACHE_MS = 10 * 60 * 1000;
+
+function cacheGet(key) {
+  const e = cache.get(key);
+  if (!e || Date.now() > e.exp) return null;
+  return e.data;
+}
+
+function cacheSet(key, data) {
+  cache.set(key, { data, exp: Date.now() + CACHE_MS });
+}
 
 /** Turn pasted poster/backdrop URLs into usable image list. */
 function resolveArtUrl(input) {
@@ -43,12 +55,18 @@ export function createArtRouter() {
       }
 
       if (!tmdbId && title) {
-        const params = new URLSearchParams({ query: title, include_adult: 'false' });
-        if (year) params.set(kind === 'tv' ? 'first_air_date_year' : 'year', String(year));
-        let searchUrl = withTmdbKey(`${TMDB}/search/${kind}?${params}`, apiKey);
-        const searchRes = await fetch(searchUrl, { headers: tmdbAuthHeaders(apiKey) });
-        const searchJson = await searchRes.json();
-        tmdbId = searchJson.results?.[0]?.id || null;
+        const sk = `search:${kind}:${title}:${year || ''}`;
+        let hit = cacheGet(sk);
+        if (!hit) {
+          const params = new URLSearchParams({ query: title, include_adult: 'false' });
+          if (year) params.set(kind === 'tv' ? 'first_air_date_year' : 'year', String(year));
+          let searchUrl = withTmdbKey(`${TMDB}/search/${kind}?${params}`, apiKey);
+          const searchRes = await fetch(searchUrl, { headers: tmdbAuthHeaders(apiKey) });
+          const searchJson = await searchRes.json();
+          hit = searchJson.results?.[0] || null;
+          if (hit) cacheSet(sk, hit);
+        }
+        tmdbId = hit?.id || null;
       }
 
       if (!tmdbId) {

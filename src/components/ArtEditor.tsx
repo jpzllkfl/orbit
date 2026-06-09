@@ -31,13 +31,23 @@ export function ArtEditor({
   const [loadingImgs, setLoadingImgs] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const [artErr, setArtErr] = useState('');
+
   useEffect(() => {
     if (tab !== 'official') return;
     setLoadingImgs(true);
-    Lib.fetchImages(node).then((r) => {
-      setImgs(r);
-      setLoadingImgs(false);
-    });
+    setArtErr('');
+    const ready = Lib.ensureTmdbReady?.() ?? Promise.resolve();
+    ready
+      .then(() => Lib.fetchImages(node))
+      .then((r) => {
+        setImgs(r);
+        if (!r?.posters?.length && !r?.backdrops?.length) {
+          setArtErr(Lib.connected ? 'No matches for this title on TMDB.' : 'Orbit server TMDB is not ready yet.');
+        }
+      })
+      .catch(() => setArtErr('Could not reach Orbit artwork API. Refresh and try again.'))
+      .finally(() => setLoadingImgs(false));
   }, [tab, node.id, node.title, isCollection]);
 
   useEffect(() => {
@@ -195,9 +205,10 @@ export function ArtEditor({
             </div>
           ) : (
             <div className="empty" style={{ padding: '24px 0' }}>
-              {Lib.connected
-                ? 'No official artwork found for this title. Try Community or paste a direct image link.'
-                : 'Orbit server TMDB is not configured yet. Paste an image URL or use Community.'}
+              {artErr ||
+                (Lib.connected
+                  ? 'No official artwork found for this title. Try Community or paste a direct image link.'
+                  : 'Orbit server TMDB is not configured yet. Paste an image URL or use Community.')}
             </div>
           ))}
 

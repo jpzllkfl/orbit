@@ -8,15 +8,37 @@ export function normalizeOrigin(url: string): string {
   return 'https://' + t;
 }
 
+function isPrivateHost(url: string): boolean {
+  try {
+    const h = new URL(url).hostname.toLowerCase();
+    return (
+      h === 'localhost' ||
+      h === '127.0.0.1' ||
+      h.startsWith('192.168.') ||
+      h.startsWith('10.') ||
+      h.endsWith('.local')
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function getHomeServer(): string {
+  const pageOrigin = typeof window !== 'undefined' ? window.location.origin : '';
   try {
     const stored = localStorage.getItem(HOME_LS);
-    if (stored) return normalizeOrigin(stored);
+    if (stored) {
+      const norm = normalizeOrigin(stored);
+      // Account sync may carry a LAN home from desktop — don't use it on the public site.
+      if (pageOrigin && isPrivateHost(norm) && !isPrivateHost(pageOrigin)) {
+        return pageOrigin;
+      }
+      return norm;
+    }
   } catch {
     /* ignore */
   }
-  if (typeof window !== 'undefined') return window.location.origin;
-  return '';
+  return pageOrigin || '';
 }
 
 export function setHomeServer(url: string) {
