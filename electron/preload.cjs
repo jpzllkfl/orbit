@@ -32,4 +32,7 @@ contextBridge.exposeInMainWorld('orbitNative', {
   openExternal(url) {
     return ipcRenderer.invoke('orbit-shell:open-external', url);
   },
+  pickFolder() {
+    return ipcRenderer.invoke('orbit-shell:pick-folder');
+  },
 });

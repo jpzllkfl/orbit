@@ -1366,7 +1366,24 @@ html.orbit-reduce-motion .coll-card { transition: none !important; transform: no
 .oms-lib-meta { grid-column: 1; display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--muted); }
 .oms-warn { color: #fbbf24; }
 .oms-lib-actions { grid-column: 2; grid-row: 1 / span 2; display: flex; align-items: center; gap: 8px; }
-@media (max-width: 760px) { .conns-grid { grid-template-columns: 1fr; } .oms-row { grid-template-columns: 1fr; } .oms-lib { grid-template-columns: 1fr; } .oms-lib-actions { grid-column: 1; grid-row: auto; } }
+.oms-path-row { display: flex; gap: 10px; align-items: stretch; }
+.oms-path-row input { flex: 1; min-width: 0; }
+.oms-browse-modal { max-width: 520px; }
+.oms-browse-roots, .oms-browse-list { display: flex; flex-direction: column; gap: 4px; max-height: 280px; overflow-y: auto; margin: 12px 0; }
+.oms-browse-label { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.oms-browse-row {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,.03);
+  color: var(--text); cursor: pointer; font-size: 14px;
+}
+.oms-browse-row:hover:not(:disabled) { border-color: color-mix(in oklch, var(--cool), transparent 50%); background: rgba(255,255,255,.05); }
+.oms-browse-row:disabled { opacity: .45; cursor: not-allowed; }
+.oms-browse-ic { display: grid; place-items: center; color: var(--cool); flex: none; }
+.oms-browse-ic svg { width: 18px; height: 18px; }
+.oms-browse-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oms-browse-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.oms-browse-path { font-size: 11.5px; color: var(--muted); word-break: break-all; flex: 1; min-width: 120px; }
+@media (max-width: 760px) { .conns-grid { grid-template-columns: 1fr; } .oms-row { grid-template-columns: 1fr; } .oms-lib { grid-template-columns: 1fr; } .oms-lib-actions { grid-column: 1; grid-row: auto; } .oms-path-row { flex-direction: column; } }
 
 .settings-page .settings-grid { max-width: 920px; }
 .settings-rows { display: flex; flex-direction: column; gap: 14px; }

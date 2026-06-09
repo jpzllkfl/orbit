@@ -1,4 +1,4 @@
-import type { MediaItem, MediaLibrary, MediaServerStatus } from '../types/media';
+import type { BrowseResult, BrowseRoot, MediaItem, MediaLibrary, MediaServerStatus } from '../types/media';
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch('/api/media' + path, {
@@ -41,5 +41,15 @@ export const OrbitMedia = {
       '/libraries/' + encodeURIComponent(libraryId) + '/items?limit=' + limit,
     );
     return items;
+  },
+
+  async browseRoots(): Promise<BrowseRoot[]> {
+    const { roots } = await api<{ roots: BrowseRoot[] }>('/browse/roots');
+    return roots;
+  },
+
+  async browse(path?: string): Promise<BrowseResult> {
+    const q = path ? '?path=' + encodeURIComponent(path) : '';
+    return api<BrowseResult>('/browse' + q);
   },
 };

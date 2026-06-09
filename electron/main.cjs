@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const http = require('http');
 const { pathToFileURL } = require('url');
@@ -219,6 +219,16 @@ app.on('window-all-closed', () => {
 
 ipcMain.handle('orbit-shell:open-external', async (_evt, url) => {
   if (url) await shell.openExternal(String(url));
+});
+
+ipcMain.handle('orbit-shell:pick-folder', async () => {
+  const win = BrowserWindow.getFocusedWindow() || mainWindow;
+  const result = await dialog.showOpenDialog(win || undefined, {
+    title: 'Choose media library folder',
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (result.canceled || !result.filePaths?.length) return null;
+  return result.filePaths[0];
 });
 
 ipcMain.handle('orbit-native:info', async () => ({

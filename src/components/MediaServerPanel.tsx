@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { OrbitMedia } from '../lib/orbitMedia';
 import type { MediaLibrary, MediaServerStatus } from '../types/media';
+import { FolderBrowserModal } from './FolderBrowserModal';
 import { Icons } from './icons';
 
 const ic = { ...Icons, refresh: Icons.spark };
+
+function canNativeFolderPick() {
+  return typeof window !== 'undefined' && typeof window.orbitNative?.pickFolder === 'function';
+}
 
 export function MediaServerPanel() {
   const [status, setStatus] = useState<MediaServerStatus | null>(null);
@@ -14,6 +19,7 @@ export function MediaServerPanel() {
   const [name, setName] = useState('');
   const [type, setType] = useState<'movie' | 'tv'>('movie');
   const [rootPath, setRootPath] = useState('/media/movies');
+  const [browseOpen, setBrowseOpen] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -70,6 +76,25 @@ export function MediaServerPanel() {
     }
   }
 
+  async function pickFolder() {
+    if (canNativeFolderPick()) {
+      try {
+        const picked = await window.orbitNative!.pickFolder!();
+        if (picked) {
+          setRootPath(picked);
+          if (!name.trim()) {
+            const leaf = picked.replace(/[/\\]+$/, '').split(/[/\\]/).pop();
+            if (leaf) setName(leaf);
+          }
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not open folder picker');
+      }
+      return;
+    }
+    setBrowseOpen(true);
+  }
+
   return (
     <div className="conns-card wide oms-card">
       <div className="conns-card-h">
@@ -103,22 +128,40 @@ export function MediaServerPanel() {
         </div>
         <label className="oms-path">
           Folder path
-          <input
-            value={rootPath}
-            onChange={(e) => setRootPath(e.target.value)}
-            placeholder="/media/movies"
-            spellCheck={false}
-          />
+          <div className="oms-path-row">
+            <input
+              value={rootPath}
+              onChange={(e) => setRootPath(e.target.value)}
+              placeholder="/media/movies"
+              spellCheck={false}
+            />
+            <button type="button" className="conns-btn sm" onClick={pickFolder}>
+              {ic.folder({})} Browse…
+            </button>
+          </div>
         </label>
         <p className="conns-sub oms-hint">
-          Use the path <strong>inside the Orbit container</strong>. In Docker, mount drives in{' '}
-          <code>docker-compose.yml</code> (e.g. <code>D:/Media/Movies:/media/movies</code>) then enter{' '}
-          <code>/media/movies</code> here.
+          <strong>Browse</strong> opens folders on the Orbit server (Docker: mount drives in{' '}
+          <code>docker-compose.yml</code> first). Orbit Desktop opens Windows File Explorer directly.
         </p>
         <button className="conns-btn primary sm" disabled={busy || !rootPath.trim()} onClick={addLibrary}>
           {ic.plus({})}Add library folder
         </button>
       </div>
+
+      {browseOpen && (
+        <FolderBrowserModal
+          onClose={() => setBrowseOpen(false)}
+          onSelect={(p) => {
+            setRootPath(p);
+            setBrowseOpen(false);
+            if (!name.trim()) {
+              const leaf = p.replace(/[/\\]+$/, '').split(/[/\\]/).pop();
+              if (leaf) setName(leaf);
+            }
+          }}
+        />
+      )}
 
       {error && <p className="conns-err">{error}</p>}
 

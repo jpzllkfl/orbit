@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { browseDir, browseRoots } from './browse.js';
 import { mediaStats } from './db.js';
 import { addLibrary, getLibrary, listLibraries, removeLibrary } from './libraries.js';
 import { listItems, scanLibrary } from './scanner.js';
@@ -14,6 +15,19 @@ export function createMediaRouter() {
       version: 1,
       ...stats,
     });
+  });
+
+  router.get('/browse/roots', (_req, res) => {
+    res.json({ roots: browseRoots() });
+  });
+
+  router.get('/browse', (req, res) => {
+    try {
+      const p = typeof req.query.path === 'string' ? req.query.path : '';
+      res.json(browseDir(p || null));
+    } catch (e) {
+      res.status(400).json({ error: e.message || 'Cannot browse folder.' });
+    }
   });
 
   router.get('/libraries', (_req, res) => {

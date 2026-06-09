@@ -17,6 +17,7 @@ export type OrbitNativeAPI = {
   stop(): Promise<void>;
   onResyncBounds?(cb: () => void): void;
   openExternal(url: string): Promise<void>;
+  pickFolder?(): Promise<string | null>;
 };
 
 declare global {

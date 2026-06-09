@@ -26,6 +26,27 @@ export interface MediaItem {
   filePath: string;
 }
 
+export interface BrowseEntry {
+  name: string;
+  path: string;
+  type: 'dir';
+}
+
+export interface BrowseRoot {
+  path: string;
+  name: string;
+  label: string;
+  exists: boolean;
+  readable: boolean;
+}
+
+export interface BrowseResult {
+  path: string | null;
+  parent: string | null;
+  roots?: BrowseRoot[];
+  entries: BrowseEntry[];
+}
+
 export interface MediaServerStatus {
   ok: boolean;
   service: string;
