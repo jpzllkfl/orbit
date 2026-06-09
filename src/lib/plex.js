@@ -949,6 +949,36 @@ window.OrbitPlex = (function () {
     return out;
   }
 
+  /* ---------- Plex home hubs (Continue Watching, On Deck — same as Plex apps) ---------- */
+  async function fetchHomeHub(hubKey, count = 24) {
+    if (!conn) return [];
+    try {
+      const j = await api('/hubs/home/' + hubKey + '?count=' + count);
+      const mc = j.MediaContainer || {};
+      const fromHubs = asList(mc.Hub).flatMap((h) => asList(h.Metadata));
+      const direct = asList(mc.Metadata);
+      const seen = new Set();
+      const out = [];
+      for (const it of [...fromHubs, ...direct]) {
+        const k = String(it.ratingKey || '');
+        if (!k || seen.has(k)) continue;
+        seen.add(k);
+        out.push(it);
+      }
+      return out;
+    } catch {
+      return [];
+    }
+  }
+
+  async function fetchContinueWatching(count = 24) {
+    return fetchHomeHub('continueWatching', count);
+  }
+
+  async function fetchOnDeck(count = 24) {
+    return fetchHomeHub('onDeck', count);
+  }
+
   /* ---------- demo fallback (design sandbox / no server) ---------- */
   function fetchMock() {
     const M = (title, year, genre) => ({ type: 'movie', title, year, genre: genre || '' });
@@ -974,6 +1004,7 @@ window.OrbitPlex = (function () {
     // library + media (real)
     sections, buildTree, fetchCollections, img, imgUrl, mediaUrl, themeUrl, getThemeUrl, api, toTitle,
     fetchMetadata, fetchDetails, fetchSubtitleStreamUrl, resolvePlayback, pickShowEpisode, fetchSeasons, fetchShowLeaves, scrobble, unscrobble, reportProgress,
+    fetchHomeHub, fetchContinueWatching, fetchOnDeck,
     sendTimeline, pingTranscodeSession, getPlaybackSession, startPlaybackSession, beginNewPlayback: startPlaybackSession, isLocalConnection,
     // playback (real)
     canDirectPlayInBrowser, proxyStreamUrl, directPlayUrl, nativeDirectUrl, resolveNativeStream,

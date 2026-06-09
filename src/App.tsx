@@ -135,7 +135,24 @@ export default function App() {
 
   useEffect(() => Lib.onChange(() => setVer((v) => v + 1)), []);
 
-  // Plex watch-state sync is expensive (API per show). Skip on desktop — Continue Watching uses local progress.
+  // Refresh home watch rows from Plex hubs (fast — one API call vs per-show sync).
+  useEffect(() => {
+    if (!Conn.live || !Plex.connected || !liveTreeRef.current) return;
+    let alive = true;
+    const t = window.setTimeout(() => {
+      import('./lib/plexHubs').then(({ loadPlexContinueWatching }) =>
+        loadPlexContinueWatching(tree).then(() => {
+          if (alive) setVer((v) => v + 1);
+        }),
+      );
+    }, 2000);
+    return () => {
+      alive = false;
+      window.clearTimeout(t);
+    };
+  }, [connVer, libraryReady]);
+
+  // Deep watch-state sync (slower — walks every show). Web only; hubs cover Continue Watching.
   useEffect(() => {
     if (isDesktopApp() || !Conn.live || !Plex.connected || !liveTreeRef.current) return;
     let alive = true;

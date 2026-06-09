@@ -183,6 +183,10 @@ export interface OrbitPlexClient {
   unscrobble(ratingKey: string): Promise<void>;
   reportProgress(ratingKey: string, timeMs: number): Promise<void>;
   fetchSubtitleStreamUrl(ratingKey: string): Promise<string | null>;
+  toTitle(it: Record<string, unknown>): OrbitNode;
+  fetchHomeHub(hubKey: string, count?: number): Promise<Record<string, unknown>[]>;
+  fetchContinueWatching(count?: number): Promise<Record<string, unknown>[]>;
+  fetchOnDeck(count?: number): Promise<Record<string, unknown>[]>;
 }
 
 declare global {

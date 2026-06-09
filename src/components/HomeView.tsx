@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { OT, Progress } from '../lib';
+import { OT, Plex, Progress } from '../lib';
+import { loadPlexContinueWatching, loadPlexOnDeck } from '../lib/plexHubs';
 import { titleNodesForRoot } from '../lib/treeIndex';
 import type { HomeRow, OrbitNode, PlayPayload, ProgressRecord } from '../types/orbit';
 import { CollectionCard, CollectionPoster, useCardMenu } from './Cards';
@@ -612,18 +613,41 @@ export function HomeView({
   const allTitles = useMemo(() => dedupe(titleNodesForRoot(tree, isGlobal ? null : root)), [root.id, tree, cwVer, isGlobal]);
   const allColls = useMemo(() => OT.allCollections(root, false).map((x) => x.node), [root.id, tree, cwVer]);
   const scopeIds = useMemo(() => new Set(allTitles.map((n) => n.id)), [allTitles]);
-  const cw = useMemo(
-    () => Progress.list().filter((r) => (isGlobal ? true : scopeIds.has(r.node.id))),
-    [scopeIds, cwVer, isGlobal],
-  );
+  const [plexCw, setPlexCw] = useState<ProgressRecord[]>([]);
+  const [plexDeck, setPlexDeck] = useState<ProgressRecord[]>([]);
+
+  useEffect(() => {
+    if (!Plex.connected || !isGlobal) {
+      setPlexCw([]);
+      setPlexDeck([]);
+      return;
+    }
+    let alive = true;
+    Promise.all([loadPlexContinueWatching(tree), loadPlexOnDeck(tree)]).then(([cw, deck]) => {
+      if (!alive) return;
+      setPlexCw(cw);
+      setPlexDeck(deck);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [tree, cwVer, isGlobal]);
+
+  const cw = useMemo(() => {
+    const list =
+      Plex.connected && plexCw.length
+        ? plexCw
+        : Progress.list().map((rec) => {
+            const full = OT.findById(tree, rec.node.id);
+            return full ? { ...rec, node: full } : rec;
+          });
+    return list.filter((r) => (isGlobal ? true : scopeIds.has(r.node.id)));
+  }, [plexCw, scopeIds, cwVer, isGlobal, tree]);
 
   function itemsFor(row: HomeRow): OrbitNode[] | ProgressRecord[] {
     switch (row.kind) {
       case 'continue':
-        return cw.map((rec) => {
-          const full = OT.findById(tree, rec.node.id);
-          return full ? { ...rec, node: full } : rec;
-        });
+        return cw;
       case 'libraries':
         return libs;
       case 'collections':
@@ -718,6 +742,22 @@ export function HomeView({
         <Row
           row={{ id: 'cw', title: 'Continue Watching', kind: 'continue' }}
           items={cw}
+          editing={false}
+          onOpen={onOpen}
+          onPlay={onPlay}
+          onRemove={() => {}}
+          onMove={() => {}}
+          onRandomize={() => {}}
+          onEditArt={onEditArt}
+          onEditCollArt={onEditCollArt}
+          onTitleMenu={onTitleMenu}
+          onCollMenu={onCollMenu}
+        />
+      )}
+      {plexDeck.length > 0 && isGlobal && !curating && (
+        <Row
+          row={{ id: 'deck', title: 'On Deck', kind: 'continue' }}
+          items={plexDeck}
           editing={false}
           onOpen={onOpen}
           onPlay={onPlay}
