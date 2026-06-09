@@ -18,6 +18,20 @@ export function createApp() {
   app.disable('x-powered-by');
   app.use(express.json({ limit: '25mb' }));
 
+  // Allow desktop / other origins to call auth + OMS on the home server (Bearer token).
+  app.use((req, res, next) => {
+    if (!req.path.startsWith('/api/')) return next();
+    const origin = req.headers.origin;
+    if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    }
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+  });
+
   app.get('/api/health', (_req, res) => {
     let media = { enabled: false };
     try {

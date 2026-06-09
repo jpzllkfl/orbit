@@ -1,7 +1,8 @@
 import type { BrowseResult, BrowseRoot, MediaItem, MediaLibrary, MediaServerStatus } from '../types/media';
+import { orbitApiFetch } from './orbitApi';
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch('/api/media' + path, {
+  const res = await orbitApiFetch('/api/media' + path, {
     headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
     ...init,
   });

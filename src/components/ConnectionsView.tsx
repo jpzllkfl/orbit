@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Conn, Lib, OT, OrbitAccount, Plex, TreeStore } from '../lib';
+import { isDesktopApp } from '../lib/isDesktop';
+import { getHomeServer, isUsingRemoteHome, setHomeServer } from '../lib/orbitServer';
 import type { OrbitNode } from '../types/orbit';
 import { OrbitAccountModal } from './OrbitAccountModal';
 import { MediaServerPanel } from './MediaServerPanel';
@@ -38,6 +40,7 @@ export function ConnectionsView({
   const [accountModal, setAccountModal] = useState<'login' | 'register' | null>(null);
   const [syncBusy, setSyncBusy] = useState(false);
   const [lastCloudSync, setLastCloudSync] = useState<number | null>(null);
+  const [homeUrl, setHomeUrl] = useState(() => getHomeServer());
   const syncedLabel = conn?.syncedAt
     ? new Date(conn.syncedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
     : 'not yet';
@@ -121,9 +124,40 @@ export function ConnectionsView({
           </div>
           <p className="conns-p">
             {orbitUser
-              ? 'Your curated collections, artwork, home layout, and settings sync to this Orbit server — sign in on iPad or another browser with the same address to pick up where you left off.'
-              : 'Create a free Orbit account so your curation work follows you across devices on this network.'}
+              ? 'Your library, media folders, artwork, and settings sync through your Orbit account — like Plex, one home server, any device.'
+              : 'Create a free Orbit account so your media libraries and curation follow you on web and desktop.'}
           </p>
+          {(isDesktopApp() || isUsingRemoteHome()) && (
+            <label className="oms-path" style={{ marginTop: 12, display: 'block' }}>
+              Orbit home server
+              <input
+                value={homeUrl}
+                onChange={(e) => setHomeUrl(e.target.value)}
+                placeholder="https://orbit.broken-eye.com"
+                spellCheck={false}
+              />
+            </label>
+          )}
+          {(isDesktopApp() || isUsingRemoteHome()) && (
+            <div className="conns-actions" style={{ marginTop: 8 }}>
+              <button
+                className="conns-btn sm"
+                onClick={() => {
+                  setHomeServer(homeUrl);
+                  if (OrbitAccount.signedIn) OrbitAccount.pushSync().catch(() => {});
+                  onBump?.();
+                }}
+              >
+                Save home server
+              </button>
+            </div>
+          )}
+          {isDesktopApp() && (
+            <p className="conns-sub" style={{ marginTop: 8 }}>
+              Set this to your live site (e.g. <code>https://orbit.broken-eye.com</code>), save, then sign in — desktop
+              will use the same media paths and library as the web app.
+            </p>
+          )}
           <div className="conns-acct">
             <div className="conns-av orbit-acct-av">{(orbitUser?.displayName || 'O').slice(0, 1)}</div>
             <div>

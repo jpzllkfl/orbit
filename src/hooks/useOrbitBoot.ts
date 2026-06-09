@@ -14,6 +14,7 @@ import {
   treeHasContent,
   treeHasLibraries,
 } from '../lib';
+import { maybeMergeOmsTree } from '../lib/omsSync';
 import { invalidateTitleIndex } from '../lib/treeIndex';
 import type { OrbitUser } from '../lib/orbitAccount';
 import type { OrbitNode } from '../types/orbit';
@@ -151,6 +152,14 @@ export function useOrbitBoot(opts: {
           state = await loadAppStateAsync();
         }
 
+        if (!alive) return;
+        if (user) {
+          const omsMerged = await maybeMergeOmsTree(state.tree);
+          if (omsMerged) {
+            state = { tree: omsMerged, path: [omsMerged.id] };
+            resetAppStateCache(false);
+          }
+        }
         if (!alive) return;
         await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
         if (!alive) return;

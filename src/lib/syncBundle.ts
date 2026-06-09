@@ -15,6 +15,8 @@ const SYNC_KEY_PREFIXES = [
   'orbit.home.rows.',
   'orbit.plex.',
   'orbit.watched.',
+  'orbit.oms.',
+  'orbit.server.home.',
 ];
 
 const SKIP_KEYS = new Set(['orbit.session.v1', 'orbit.art.cache.v1']);
@@ -61,7 +63,14 @@ export function hydrateSyncedModules() {
   }
 }
 
-const APPLY_FIRST = ['orbit.tree.v1', 'orbit.conn.v1', 'orbit.plex.conn', 'orbit.tmdb.v1'];
+const APPLY_FIRST = [
+  'orbit.server.home.v1',
+  'orbit.tree.v1',
+  'orbit.conn.v1',
+  'orbit.plex.conn',
+  'orbit.tmdb.v1',
+  'orbit.oms.libraries.v1',
+];
 
 /** Drop embedded base64 art — it balloons sync size and can exceed localStorage quota. */
 function slimArtOverrides(raw: string): string {

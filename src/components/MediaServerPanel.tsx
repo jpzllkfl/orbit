@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Lib } from '../lib';
 import { fetchOmsTree, mergeOmsIntoTree } from '../lib/importLibraryFromOms';
+import { syncOmsAfterChange } from '../lib/omsSync';
+import { isUsingRemoteHome } from '../lib/orbitServer';
 import { OrbitMedia } from '../lib/orbitMedia';
 import type { MediaLibrary, MediaServerStatus } from '../types/media';
 import type { OrbitNode } from '../types/orbit';
@@ -53,6 +55,7 @@ export function MediaServerPanel({
       await OrbitMedia.addLibrary({ name: name.trim() || (type === 'movie' ? 'Movies' : 'TV Shows'), type, rootPath: rootPath.trim() });
       setName('');
       await reload();
+      await syncOmsAfterChange();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not add library');
     } finally {
@@ -66,6 +69,7 @@ export function MediaServerPanel({
     try {
       await OrbitMedia.removeLibrary(id);
       await reload();
+      await syncOmsAfterChange();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not remove library');
     } finally {
@@ -79,6 +83,7 @@ export function MediaServerPanel({
     try {
       await OrbitMedia.scanLibrary(id);
       await reload();
+      await syncOmsAfterChange();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Scan failed');
     } finally {
@@ -115,6 +120,7 @@ export function MediaServerPanel({
           );
         }
       }
+      await syncOmsAfterChange();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Setup failed');
     } finally {
@@ -153,6 +159,7 @@ export function MediaServerPanel({
       setImportMsg(
         `Added ${result.libraryCount ?? 0} librar${result.libraryCount === 1 ? 'y' : 'ies'} · ${result.titleCount ?? 0} titles to Orbit.`,
       );
+      await syncOmsAfterChange();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Import failed');
     } finally {
@@ -161,7 +168,7 @@ export function MediaServerPanel({
   }
 
   async function pickFolder() {
-    if (canNativeFolderPick()) {
+    if (!isUsingRemoteHome() && canNativeFolderPick()) {
       try {
         const picked = await window.orbitNative!.pickFolder!();
         if (picked) {
@@ -248,8 +255,9 @@ export function MediaServerPanel({
           </button>
         </div>
         <p className="conns-sub oms-hint">
-          Click <strong>Browse for folder</strong> to pick a path on the Orbit server. In Docker, mount drives in{' '}
-          <code>docker-compose.yml</code> first (e.g. <code>T:/movies:/media/movies</code>).
+          Library paths sync to your Orbit account — same folders on web and desktop. Use paths on your{' '}
+          <strong>home server</strong> (e.g. <code>/media/movies</code> on TrueNAS). Mount folders in Dockge compose
+          first.
         </p>
       </div>
 

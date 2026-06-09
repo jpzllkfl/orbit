@@ -1,5 +1,9 @@
+import { orbitApiFetch } from './orbitApi';
+import { getHomeServer, setHomeServer } from './orbitServer';
 import { applySyncBundle, collectSyncBundle } from './syncBundle';
+import { reconcileOmsLibrariesFromSync } from './omsSync';
 import { TreeStore } from './treeStore.ts';
+import { isDesktopApp } from './isDesktop';
 
 const SESSION_LS = 'orbit.session.v1';
 const USER_LS = 'orbit.user.v1';
@@ -42,16 +46,17 @@ function clearSession() {
 }
 
 async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem(SESSION_LS);
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(opts.headers as Record<string, string>),
-  };
-  if (token) headers.Authorization = 'Bearer ' + token;
-  const res = await fetch('/api/auth' + path, { ...opts, headers });
+  const res = await orbitApiFetch('/api/auth' + path, opts);
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error || res.statusText || 'Request failed');
+  if (!res.ok) throw new Error((json as { error?: string }).error || res.statusText || 'Request failed');
   return json as T;
+}
+
+function rememberHomeServer() {
+  if (typeof window === 'undefined' || isDesktopApp()) return;
+  if (!localStorage.getItem('orbit.server.home.v1')) {
+    setHomeServer(window.location.origin);
+  }
 }
 
 export const OrbitAccount = {
@@ -85,6 +90,7 @@ export const OrbitAccount = {
       body: JSON.stringify({ email, password, displayName }),
     });
     saveSession(token, user);
+    rememberHomeServer();
     syncHydrated = true;
     await OrbitAccount.pushSync();
     lastPullAt = Date.now();
@@ -97,6 +103,7 @@ export const OrbitAccount = {
       body: JSON.stringify({ email, password }),
     });
     saveSession(token, user);
+    rememberHomeServer();
     syncHydrated = false;
     return user;
   },
@@ -131,6 +138,7 @@ export const OrbitAccount = {
     if (keyCount) {
       applySyncBundle(state.bundle);
     }
+    await reconcileOmsLibrariesFromSync();
     syncHydrated = true;
     lastPullAt = Date.now();
     return {
@@ -138,6 +146,7 @@ export const OrbitAccount = {
       keyCount,
       hasTree: TreeStore.hasSaved(),
       hasConn: !!localStorage.getItem('orbit.conn.v1'),
+      homeServer: getHomeServer(),
     };
   },
 
