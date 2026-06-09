@@ -13,16 +13,18 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8090
 
-COPY package.json package-lock.json ./
+# /app must be writable by node for npm ci; avoid recursive chown over node_modules
+RUN chown node:node /app
+
+COPY --chown=node:node package.json package-lock.json ./
+
+USER node
 RUN npm ci --omit=dev
 
-COPY server ./server
-COPY --from=build /app/dist ./dist
+COPY --chown=node:node server ./server
+COPY --chown=node:node --from=build /app/dist ./dist
 
-RUN chown -R node:node /app
 EXPOSE 8090
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://127.0.0.1:8090/api/health || exit 1
-
-USER node
 CMD ["node", "server/index.js"]
