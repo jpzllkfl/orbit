@@ -1,0 +1,26 @@
+services:
+  orbit:
+    build: .
+    image: orbit:latest
+    container_name: orbit
+    ports:
+      - "${ORBIT_PORT:-8090}:8090"
+    environment:
+      PORT: 8090
+      ORBIT_DOCKER: "1"
+    volumes:
+      # Account login + cloud sync state — survives image rebuilds
+      - orbit-data:/app/server/data
+    restart: unless-stopped
+    extra_hosts:
+      # Plex on the Docker host (same PC) — container reaches it via this hostname
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8090/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  orbit-data:
