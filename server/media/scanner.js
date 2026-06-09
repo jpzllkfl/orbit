@@ -55,7 +55,10 @@ export function scanLibrary(libraryId, onProgress) {
 
   let count = 0;
   const now = Date.now();
-  const txn = db.transaction((files) => {
+  const files = [...walkDir(lib.rootPath)];
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
     for (const filePath of files) {
       const fileName = path.basename(filePath);
       if (!isVideoFile(fileName)) continue;
@@ -112,10 +115,15 @@ export function scanLibrary(libraryId, onProgress) {
         onProgress?.({ phase: 'progress', message: `Found ${count} files…`, count });
       }
     }
-  });
-
-  const files = [...walkDir(lib.rootPath)];
-  txn(files);
+    db.exec('COMMIT');
+  } catch (e) {
+    try {
+      db.exec('ROLLBACK');
+    } catch {
+      /* ignore */
+    }
+    throw e;
+  }
 
   updateLibraryScan(libraryId, {
     status: 'done',

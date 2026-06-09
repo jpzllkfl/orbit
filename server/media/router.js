@@ -8,13 +8,21 @@ export function createMediaRouter() {
   const router = Router();
 
   router.get('/status', (_req, res) => {
-    const stats = mediaStats();
-    res.json({
-      ok: true,
-      service: 'orbit-media',
-      version: 1,
-      ...stats,
-    });
+    try {
+      const stats = mediaStats();
+      res.json({
+        ok: true,
+        service: 'orbit-media',
+        version: 1,
+        ...stats,
+      });
+    } catch (e) {
+      res.status(503).json({
+        ok: false,
+        service: 'orbit-media',
+        error: e.message || 'Media database unavailable',
+      });
+    }
   });
 
   router.get('/browse/roots', (_req, res) => {
@@ -31,7 +39,11 @@ export function createMediaRouter() {
   });
 
   router.get('/libraries', (_req, res) => {
-    res.json({ libraries: listLibraries() });
+    try {
+      res.json({ libraries: listLibraries() });
+    } catch (e) {
+      res.status(503).json({ error: e.message || 'Media database unavailable' });
+    }
   });
 
   router.post('/libraries', (req, res) => {

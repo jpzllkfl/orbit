@@ -13,9 +13,6 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8090
 
-# Native module build for better-sqlite3 (Orbit Media Server index)
-RUN apk add --no-cache python3 make g++
-
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
