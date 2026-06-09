@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Conn, Lib, OT, OrbitAccount, Plex, TreeStore } from '../lib';
 import type { OrbitNode } from '../types/orbit';
 import { OrbitAccountModal } from './OrbitAccountModal';
+import { MediaServerPanel } from './MediaServerPanel';
 import { Icons, LIB_ICON } from './icons';
 
 const ic = {
@@ -109,6 +110,8 @@ export function ConnectionsView({
       </div>
 
       <div className="conns-grid">
+        <MediaServerPanel />
+
         <div className="conns-card wide orbit-acct-card">
           <div className="conns-card-h">
             <span className="conns-pill">{ic.orbit({})}Orbit account</span>

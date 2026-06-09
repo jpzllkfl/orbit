@@ -4,6 +4,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createAuthRouter } from './auth-router.js';
 import { lanAddresses } from './network.js';
+import { createMediaRouter } from './media/router.js';
+import { mediaStats } from './media/db.js';
 import { createPlexRouter } from './plex-proxy.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -17,11 +19,23 @@ export function createApp() {
   app.use(express.json({ limit: '25mb' }));
 
   app.get('/api/health', (_req, res) => {
-    res.json({ ok: true, service: 'orbit', plexProxy: true });
+    let media = { enabled: false };
+    try {
+      media = { enabled: true, ...mediaStats() };
+    } catch {
+      /* media db not ready */
+    }
+    res.json({ ok: true, service: 'orbit', plexProxy: true, mediaServer: media });
   });
 
   app.get('/api/config', (_req, res) => {
-    res.json({ plexProxy: true, version: '1.0', proxyBuild: '2025-06-08', native: !!process.env.ORBIT_NATIVE });
+    res.json({
+      plexProxy: true,
+      mediaServer: true,
+      version: '1.0',
+      proxyBuild: '2025-06-08',
+      native: !!process.env.ORBIT_NATIVE,
+    });
   });
 
   app.get('/api/network', (req, res) => {
@@ -34,6 +48,7 @@ export function createApp() {
   });
 
   app.use('/api/plex', createPlexRouter());
+  app.use('/api/media', createMediaRouter());
   app.use('/api/auth', createAuthRouter());
 
   if (hasDist) {

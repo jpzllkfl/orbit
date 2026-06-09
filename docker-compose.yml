@@ -11,6 +11,9 @@ services:
     volumes:
       # Account login + cloud sync state — survives image rebuilds
       - orbit-data:/app/server/data
+      # Mount your media folders here (paths in Orbit must match container paths)
+      # - "D:/Media/Movies:/media/movies:ro"
+      # - "D:/Media/TV:/media/tv:ro"
     restart: unless-stopped
     extra_hosts:
       # Plex on the Docker host (same PC) — container reaches it via this hostname

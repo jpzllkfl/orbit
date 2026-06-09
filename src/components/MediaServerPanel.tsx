@@ -1,0 +1,165 @@
+import { useCallback, useEffect, useState } from 'react';
+import { OrbitMedia } from '../lib/orbitMedia';
+import type { MediaLibrary, MediaServerStatus } from '../types/media';
+import { Icons } from './icons';
+
+const ic = { ...Icons, refresh: Icons.spark };
+
+export function MediaServerPanel() {
+  const [status, setStatus] = useState<MediaServerStatus | null>(null);
+  const [libraries, setLibraries] = useState<MediaLibrary[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [scanningId, setScanningId] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [name, setName] = useState('');
+  const [type, setType] = useState<'movie' | 'tv'>('movie');
+  const [rootPath, setRootPath] = useState('/media/movies');
+
+  const reload = useCallback(async () => {
+    try {
+      const [st, libs] = await Promise.all([OrbitMedia.status(), OrbitMedia.listLibraries()]);
+      setStatus(st);
+      setLibraries(libs);
+      setError('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Orbit Media Server unavailable');
+    }
+  }, []);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  async function addLibrary() {
+    setBusy(true);
+    setError('');
+    try {
+      await OrbitMedia.addLibrary({ name: name.trim() || (type === 'movie' ? 'Movies' : 'TV Shows'), type, rootPath: rootPath.trim() });
+      setName('');
+      await reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not add library');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeLibrary(id: string) {
+    if (!confirm('Remove this library from Orbit? Scanned items will be deleted.')) return;
+    setBusy(true);
+    try {
+      await OrbitMedia.removeLibrary(id);
+      await reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not remove library');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function scanLibrary(id: string) {
+    setScanningId(id);
+    setError('');
+    try {
+      await OrbitMedia.scanLibrary(id);
+      await reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Scan failed');
+    } finally {
+      setScanningId(null);
+    }
+  }
+
+  return (
+    <div className="conns-card wide oms-card">
+      <div className="conns-card-h">
+        <span className="conns-pill oms">{ic.orbit({})}Orbit Media Server</span>
+        <span className={'conns-state' + (status?.ok ? ' on' : '')}>{status?.ok ? 'Beta' : 'Offline'}</span>
+      </div>
+      <p className="conns-p">
+        Connect folders on this server directly to Orbit — no Plex required. Add library paths, scan files, and build your
+        own media index here. Plex libraries can stay connected during the transition.
+      </p>
+      {status?.ok && (
+        <p className="conns-sub" style={{ marginBottom: 12 }}>
+          {status.libraries} librar{status.libraries === 1 ? 'y' : 'ies'} · {status.items.toLocaleString()} indexed file
+          {status.items === 1 ? '' : 's'}
+        </p>
+      )}
+
+      <div className="oms-add">
+        <div className="oms-row">
+          <label>
+            Name
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Movies" />
+          </label>
+          <label>
+            Type
+            <select value={type} onChange={(e) => setType(e.target.value as 'movie' | 'tv')}>
+              <option value="movie">Movies</option>
+              <option value="tv">TV Shows</option>
+            </select>
+          </label>
+        </div>
+        <label className="oms-path">
+          Folder path
+          <input
+            value={rootPath}
+            onChange={(e) => setRootPath(e.target.value)}
+            placeholder="/media/movies"
+            spellCheck={false}
+          />
+        </label>
+        <p className="conns-sub oms-hint">
+          Use the path <strong>inside the Orbit container</strong>. In Docker, mount drives in{' '}
+          <code>docker-compose.yml</code> (e.g. <code>D:/Media/Movies:/media/movies</code>) then enter{' '}
+          <code>/media/movies</code> here.
+        </p>
+        <button className="conns-btn primary sm" disabled={busy || !rootPath.trim()} onClick={addLibrary}>
+          {ic.plus({})}Add library folder
+        </button>
+      </div>
+
+      {error && <p className="conns-err">{error}</p>}
+
+      {libraries.length > 0 && (
+        <div className="oms-libs">
+          {libraries.map((lib) => (
+            <div key={lib.id} className={'oms-lib' + (lib.pathExists ? '' : ' missing')}>
+              <div className="oms-lib-main">
+                <span className="oms-lib-type">{lib.type === 'movie' ? 'Movies' : 'TV'}</span>
+                <span className="oms-lib-name">{lib.name}</span>
+                <span className="oms-lib-path" title={lib.rootPath}>
+                  {lib.rootPath}
+                </span>
+              </div>
+              <div className="oms-lib-meta">
+                <span>{lib.itemCount} items</span>
+                {lib.lastScanMessage && <span title={lib.lastScanStatus || ''}>{lib.lastScanMessage}</span>}
+                {!lib.pathExists && <span className="oms-warn">Path not found</span>}
+              </div>
+              <div className="oms-lib-actions">
+                <button
+                  className="conns-btn sm"
+                  disabled={!!scanningId || !lib.pathExists}
+                  onClick={() => scanLibrary(lib.id)}
+                >
+                  {scanningId === lib.id ? (
+                    'Scanning…'
+                  ) : (
+                    <>
+                      {ic.refresh({})} Scan
+                    </>
+                  )}
+                </button>
+                <button className="conns-btn danger sm" disabled={busy} onClick={() => removeLibrary(lib.id)}>
+                  {ic.x({})}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
