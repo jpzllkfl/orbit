@@ -122,6 +122,7 @@
   .section-head h2 { font-size: 24px; }
   .hero-title { font-size: clamp(44px, 3.2vw, 72px); }
   .spot-title { font-size: clamp(38px, 3vw, 68px); }
+  .spot-logo { max-width: min(760px, 84%); max-height: 280px; }
   .dt-title { font-size: clamp(44px, 3.6vw, 76px); }
 }
 
@@ -474,6 +475,7 @@
 
   .spot { min-height: 380px; height: min(58vh, 620px); margin-bottom: 4px; }
   .spot-title { font-size: clamp(28px, 8vw, 44px); }
+  .spot-logo { max-width: min(92%, 520px); max-height: 180px; }
   .spot-content { padding-bottom: 78px; max-width: 100%; }
   .spot-actions { flex-wrap: wrap; gap: 10px; margin-top: 14px; }
   .spot-play,

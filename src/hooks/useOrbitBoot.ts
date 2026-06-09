@@ -9,6 +9,7 @@ import {
   importLibraryFromPlex,
   loadAppStateAsync,
   needsPlexImport,
+  needsLibraryRepair,
   resetAppStateCache,
   treeHasContent,
   treeHasLibraries,
@@ -92,10 +93,15 @@ export function useOrbitBoot(opts: {
         let state = await loadAppStateAsync();
         if (!alive) return;
 
-        if (needsPlexImport(state.tree)) {
+        const repairLibraries = await needsLibraryRepair(state.tree);
+
+        if (needsPlexImport(state.tree) || repairLibraries) {
           if (!treeHasContent(state.tree)) {
             TreeStore.clear();
             resetAppStateCache(false);
+          }
+          if (repairLibraries) {
+            setBootMsg('Syncing missing Plex libraries…');
           }
           setPlexBootSyncing(true);
           let partialReady = false;

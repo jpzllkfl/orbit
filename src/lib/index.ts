@@ -10,6 +10,6 @@ export { Conn } from './conn.ts';
 export type { ConnState, ConnAccount, ConnServer } from './conn.ts';
 export { TreeStore } from './treeStore.ts';
 export { loadAppState, loadAppStateAsync, resetAppStateCache, demoAppState, emptyShell, hasPersistedTree, treeHasContent, treeHasLibraries, plexIsConfigured } from './appState.ts';
-export { importLibraryFromPlex, needsPlexImport, importTitleCount } from './importLibraryFromPlex.ts';
+export { importLibraryFromPlex, needsPlexImport, needsLibraryRepair, importTitleCount } from './importLibraryFromPlex.ts';
 export { OrbitAccount } from './orbitAccount.ts';
 export type { OrbitUser } from './orbitAccount.ts';

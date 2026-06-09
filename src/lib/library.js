@@ -241,7 +241,7 @@ window.OrbitLib = (function () {
       const logos = (j.logos || []).filter((l) => l.file_path);
       logos.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
       const en = logos.find((l) => l.iso_639_1 === 'en') || logos[0];
-      const url = en ? imgUrl(en.file_path, 'w500') : null;
+      const url = en ? imgUrl(en.file_path, 'w780') : null;
       cache[k] = url ? { url } : { empty: true }; saveCache();
       return url;
     } catch (e) { return null; }

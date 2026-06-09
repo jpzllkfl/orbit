@@ -88,6 +88,27 @@ export type PlexImportResult = {
   error?: string;
 };
 
+/** All movie/TV section keys from Plex (not the cached subset). */
+export async function allPlexSectionKeys(): Promise<string[] | undefined> {
+  if (!Plex.connected) return undefined;
+  try {
+    const secs = await Plex.sections();
+    const keys = secs.map((s) => String(s.key));
+    return keys.length ? keys : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** True when Plex has more libraries than the saved tree (e.g. after a partial sync). */
+export async function needsLibraryRepair(tree: OrbitNode): Promise<boolean> {
+  if (!treeHasContent(tree) || !plexIsConfigured(Conn.load())) return false;
+  const keys = await allPlexSectionKeys();
+  if (!keys?.length) return false;
+  const imported = (tree.children || []).filter((c) => c.type === 'library').length;
+  return keys.length > imported;
+}
+
 /** Pull the full library tree from Plex using saved connection settings. */
 export async function importLibraryFromPlex(
   progress?: ImportProgress | ((msg: string) => void),
@@ -115,7 +136,7 @@ export async function importLibraryFromPlex(
 
   cb.onStatus?.('Syncing from Plex…');
   try {
-    const keys = conn!.libraries?.length ? conn!.libraries : undefined;
+    const keys = (await allPlexSectionKeys()) || (conn!.libraries?.length ? conn!.libraries : undefined);
     let live: OrbitNode;
     let sectionKeys = keys;
 
