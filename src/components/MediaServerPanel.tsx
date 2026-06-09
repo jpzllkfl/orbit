@@ -128,25 +128,25 @@ export function MediaServerPanel() {
         </div>
         <label className="oms-path">
           Folder path
-          <div className="oms-path-row">
-            <input
-              value={rootPath}
-              onChange={(e) => setRootPath(e.target.value)}
-              placeholder="/media/movies"
-              spellCheck={false}
-            />
-            <button type="button" className="conns-btn sm" onClick={pickFolder}>
-              {ic.folder({})} Browse…
-            </button>
-          </div>
+          <input
+            value={rootPath}
+            onChange={(e) => setRootPath(e.target.value)}
+            placeholder="/media/movies"
+            spellCheck={false}
+          />
         </label>
+        <div className="oms-add-actions">
+          <button type="button" className="conns-btn primary oms-browse-btn" onClick={pickFolder}>
+            {ic.folder({})} Browse for folder…
+          </button>
+          <button className="conns-btn oms-add-btn" disabled={busy || !rootPath.trim()} onClick={addLibrary}>
+            {ic.plus({})}Add library
+          </button>
+        </div>
         <p className="conns-sub oms-hint">
-          <strong>Browse</strong> opens folders on the Orbit server (Docker: mount drives in{' '}
-          <code>docker-compose.yml</code> first). Orbit Desktop opens Windows File Explorer directly.
+          Click <strong>Browse for folder</strong> to pick a path on the Orbit server. In Docker, mount drives in{' '}
+          <code>docker-compose.yml</code> first (e.g. <code>T:/movies:/media/movies</code>).
         </p>
-        <button className="conns-btn primary sm" disabled={busy || !rootPath.trim()} onClick={addLibrary}>
-          {ic.plus({})}Add library folder
-        </button>
       </div>
 
       {browseOpen && (
