@@ -71,10 +71,10 @@ export const OrbitMedia = {
     return api('/libraries/scan-all', { method: 'POST' });
   },
 
-  async matchTmdb(tmdbKey: string, libraryId?: string): Promise<{ ok: boolean; matched: number }> {
+  async matchTmdb(tmdbKey?: string, libraryId?: string): Promise<{ ok: boolean; matched: number }> {
     return api('/match', {
       method: 'POST',
-      body: JSON.stringify({ tmdbKey, libraryId }),
+      body: JSON.stringify({ tmdbKey: tmdbKey || undefined, libraryId }),
     });
   },
 

@@ -129,16 +129,15 @@ export function MediaServerPanel({
   }
 
   async function matchTmdb() {
-    const key = Lib.key;
-    if (!key) {
-      setError('Add your TMDB key in Connections → Artwork first.');
+    if (!Lib.connected) {
+      setError('TMDB is not available on this Orbit server. Set ORBIT_TMDB_API_KEY in Docker.');
       return;
     }
     setBusy(true);
     setError('');
     setImportMsg('');
     try {
-      const result = await OrbitMedia.matchTmdb(key);
+      const result = await OrbitMedia.matchTmdb(Lib.key || undefined);
       setImportMsg(`TMDB matched ${result.matched} title${result.matched === 1 ? '' : 's'}. Re-import to refresh artwork.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'TMDB match failed');

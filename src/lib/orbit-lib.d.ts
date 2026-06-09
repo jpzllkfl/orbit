@@ -44,6 +44,11 @@ export interface OrbitLib {
   searchCollections(q: string): Promise<Array<{ tmdbId: number; title: string; poster?: string | null }>>;
   collectionParts(id: number): Promise<SearchResult[]>;
   fetchImages(node: OrbitNode): Promise<{ posters: string[]; backdrops: string[] } | null>;
+  fetchCollectionImages(node: OrbitNode): Promise<{ posters: string[]; backdrops: string[] } | null>;
+  tpdbSearchUrl(node: OrbitNode): Promise<string | null>;
+  resolveArtUrl(url: string): Promise<string[]>;
+  refreshServerTmdb(): Promise<void>;
+  readonly serverTmdb: boolean;
   fetchDetails(node: OrbitNode): Promise<{
     overview?: string;
     tagline?: string;

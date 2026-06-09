@@ -10,6 +10,31 @@ window.OrbitLib = (function () {
   const CACHE_LS = 'orbit.art.cache.v1';
 
   let key = '';
+  let serverTmdb = false;
+
+  function orbitApiBase() {
+    try {
+      const home = localStorage.getItem('orbit.server.home.v1');
+      if (home) return home.replace(/\/+$/, '');
+    } catch (e) { /* ignore */ }
+    return typeof location !== 'undefined' ? location.origin : '';
+  }
+
+  function tmdbReady() {
+    loadKey();
+    return serverTmdb || !!key;
+  }
+
+  async function refreshServerTmdb() {
+    try {
+      const r = await fetch(orbitApiBase() + '/api/tmdb/status');
+      if (!r.ok) return;
+      const j = await r.json();
+      serverTmdb = !!j.available;
+      notify();
+    } catch (e) { /* offline */ }
+  }
+  refreshServerTmdb();
 
   function mirrorConnKey() {
     try {
@@ -128,15 +153,27 @@ window.OrbitLib = (function () {
   function imgUrl(path, size) { return path ? 'https://image.tmdb.org/t/p/' + (size || 'w500') + path : null; }
 
   async function apiGet(path, params) {
-    const u = new URL('https://api.themoviedb.org/3' + path);
+    if (!tmdbReady()) throw new Error('TMDB not available');
+    const u = new URL(orbitApiBase() + '/api/tmdb/proxy');
+    u.searchParams.set('path', path);
     Object.entries(params || {}).forEach(([k, v]) => { if (v != null && v !== '') u.searchParams.set(k, v); });
-    u.searchParams.set('language', 'en-US');
-    const opts = {};
-    if (key.startsWith('ey')) opts.headers = { Authorization: 'Bearer ' + key };
-    else u.searchParams.set('api_key', key);
-    const res = await fetch(u.toString(), opts);
+    if (!params || params.language == null) u.searchParams.set('language', 'en-US');
+    const headers = {};
+    if (key) headers['X-Orbit-Tmdb-Key'] = key;
+    const res = await fetch(u.toString(), { headers });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     return res.json();
+  }
+
+  async function artApi(path, params) {
+    const u = new URL(orbitApiBase() + '/api/art' + path);
+    Object.entries(params || {}).forEach(([k, v]) => { if (v != null && v !== '') u.searchParams.set(k, v); });
+    const headers = {};
+    if (key) headers['X-Orbit-Tmdb-Key'] = key;
+    const res = await fetch(u.toString(), { headers });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || 'HTTP ' + res.status);
+    return json;
   }
 
   // normalize a TMDB movie/tv record into Orbit's art+meta shape
@@ -177,7 +214,7 @@ window.OrbitLib = (function () {
       saveCache();
       return data;
     }
-    if (!key) return null;
+    if (!tmdbReady()) return null;
     if (inflight.has(k)) return inflight.get(k);
     const p = enqueueResolve(async () => {
       try {
@@ -205,7 +242,7 @@ window.OrbitLib = (function () {
   // force a TMDB lookup (ignores any Plex-seeded cache) — used as a fallback when
   // a primary (e.g. Plex server) image URL fails to load. Cached separately.
   async function resolveTmdb(node) {
-    if (!node || node.type === 'collection' || !key) return null;
+    if (!node || node.type === 'collection' || !tmdbReady()) return null;
     const k = 'tmdb:' + ck(node);
     if (cache[k]) return cache[k].empty ? null : cache[k];
     if (inflight.has(k)) return inflight.get(k);
@@ -229,7 +266,7 @@ window.OrbitLib = (function () {
   }
 
   async function resolveLogo(node) {
-    if (!node || node.type === 'collection' || !key) return null;
+    if (!node || node.type === 'collection' || !tmdbReady()) return null;
     const k = 'logo:' + ck(node);
     if (cache[k]) return cache[k].empty ? null : cache[k].url;
     try {
@@ -248,7 +285,7 @@ window.OrbitLib = (function () {
   }
   // TMDB trending this week (used to feature what's hot that you actually own)
   async function trending(kind) {
-    if (!key) return [];
+    if (!tmdbReady()) return [];
     try {
       const j = await apiGet('/trending/' + (kind === 'show' ? 'tv' : 'movie') + '/week', {});
       return (j.results || []).map((r) => ({
@@ -261,7 +298,7 @@ window.OrbitLib = (function () {
   }
 
   async function searchTitles(q) {
-    if (!key || !q.trim()) return [];
+    if (!tmdbReady() || !q.trim()) return [];
     try {
       const json = await apiGet('/search/multi', { query: q, include_adult: false });
       return (json.results || [])
@@ -271,7 +308,7 @@ window.OrbitLib = (function () {
     } catch (e) { return []; }
   }
   async function searchCollections(q) {
-    if (!key || !q.trim()) return [];
+    if (!tmdbReady() || !q.trim()) return [];
     try {
       const json = await apiGet('/search/collection', { query: q });
       return (json.results || []).map((r) => ({
@@ -282,7 +319,7 @@ window.OrbitLib = (function () {
     } catch (e) { return []; }
   }
   async function collectionParts(id) {
-    if (!key) return [];
+    if (!tmdbReady()) return [];
     try {
       const json = await apiGet('/collection/' + id, {});
       return (json.parts || []).map((p) => normalize({ ...p, media_type: 'movie' }))
@@ -292,18 +329,57 @@ window.OrbitLib = (function () {
 
   // alternate official posters/backdrops for a node (for the art picker)
   async function fetchImages(node) {
-    if (!key || !node) return null;
+    if (!tmdbReady() || !node) return null;
     try {
+      if (node.type === 'collection' || node.type === 'library') {
+        return await fetchCollectionImages(node);
+      }
       let id = node.tmdbId || (getCached(node) || {}).tmdbId;
       if (!id) { const r = await resolve(node); id = r && r.tmdbId; }
-      if (!id) return null;
       const kind = node.type === 'show' ? 'tv' : 'movie';
-      const j = await apiGet('/' + kind + '/' + id + '/images', { include_image_language: 'en,null' });
+      const j = await artApi('/images', {
+        kind,
+        title: node.title,
+        year: node.year || '',
+        tmdbId: id || '',
+      });
       return {
-        posters: (j.posters || []).slice(0, 12).map((p) => imgUrl(p.file_path, 'w342')),
-        backdrops: (j.backdrops || []).slice(0, 8).map((p) => imgUrl(p.file_path, 'w780')),
+        posters: j.posters || [],
+        backdrops: j.backdrops || [],
       };
     } catch (e) { return null; }
+  }
+
+  async function fetchCollectionImages(node) {
+    if (!tmdbReady() || !node) return null;
+    try {
+      const j = await artApi('/collection-images', { title: node.title });
+      return { posters: j.posters || [], backdrops: j.backdrops || [] };
+    } catch (e) { return null; }
+  }
+
+  async function tpdbSearchUrl(node) {
+    try {
+      const j = await artApi('/tpdb-search-url', {
+        title: node.title,
+        year: node.year || '',
+        type: node.type === 'show' ? 'show' : 'movie',
+      });
+      return j.url || null;
+    } catch (e) { return null; }
+  }
+
+  async function resolveArtUrl(url) {
+    try {
+      const res = await fetch(orbitApiBase() + '/api/art/resolve-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'Failed');
+      return j.images || [];
+    } catch (e) { return []; }
   }
 
   // pre-seed the cache from Plex import or a search result so art shows instantly
@@ -335,7 +411,7 @@ window.OrbitLib = (function () {
 
   // full title details + credits for detail pages
   async function fetchDetails(node) {
-    if (!key || !node || node.type === 'collection') return null;
+    if (!tmdbReady() || !node || node.type === 'collection') return null;
     try {
       const id = await tmdbIdFor(node);
       if (!id) return null;
@@ -369,7 +445,7 @@ window.OrbitLib = (function () {
   }
 
   async function fetchShowSeasons(node) {
-    if (!key || !node || node.type !== 'show') return [];
+    if (!tmdbReady() || !node || node.type !== 'show') return [];
     try {
       const id = await tmdbIdFor(node);
       if (!id) return [];
@@ -387,7 +463,7 @@ window.OrbitLib = (function () {
   }
 
   async function fetchSeasonEpisodes(node, season) {
-    if (!key || !node || node.type !== 'show' || !season) return [];
+    if (!tmdbReady() || !node || node.type !== 'show' || !season) return [];
     try {
       const id = await tmdbIdFor(node);
       if (!id) return [];
@@ -408,10 +484,12 @@ window.OrbitLib = (function () {
 
   return {
     resolve, resolveTmdb, resolveLogo, trending, getCached, seed, setKey, onChange, clearCache, imgUrl,
-    searchTitles, searchCollections, collectionParts, fetchImages, fetchDetails, fetchShowSeasons, fetchSeasonEpisodes,
+    searchTitles, searchCollections, collectionParts, fetchImages, fetchCollectionImages, fetchDetails, fetchShowSeasons, fetchSeasonEpisodes,
+    tpdbSearchUrl, resolveArtUrl, refreshServerTmdb,
     getOverride, setOverride, clearOverride,
     loadKey, reloadFromStorage,
-    get connected() { loadKey(); return !!key; },
+    get connected() { loadKey(); return tmdbReady(); },
+    get serverTmdb() { return serverTmdb; },
     get key() { loadKey(); return key; },
   };
 })();

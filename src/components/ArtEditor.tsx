@@ -6,6 +6,7 @@ import { Icons } from './icons';
 const I = Icons;
 
 type ArtKind = 'poster' | 'backdrop' | 'both';
+type Tab = 'upload' | 'url' | 'official' | 'community';
 
 export function ArtEditor({
   node,
@@ -20,21 +21,29 @@ export function ArtEditor({
 }) {
   const isCollection = node.type === 'collection' || node.type === 'library';
   const current = Lib.getOverride(node.id);
-  const [tab, setTab] = useState(focus === 'backdrop' ? 'official' : 'upload');
+  const [tab, setTab] = useState<Tab>(focus === 'backdrop' ? 'official' : 'upload');
   const [artTab, setArtTab] = useState<'poster' | 'backdrop'>(focus === 'backdrop' ? 'backdrop' : 'poster');
   const [urlVal, setUrlVal] = useState('');
+  const [communityUrl, setCommunityUrl] = useState('');
+  const [communityImgs, setCommunityImgs] = useState<string[]>([]);
+  const [tpdbLink, setTpdbLink] = useState<string | null>(null);
   const [imgs, setImgs] = useState<{ posters: string[]; backdrops: string[] } | null>(null);
   const [loadingImgs, setLoadingImgs] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (tab !== 'official' || isCollection) return;
+    if (tab !== 'official') return;
     setLoadingImgs(true);
     Lib.fetchImages(node).then((r) => {
       setImgs(r);
       setLoadingImgs(false);
     });
-  }, [tab, node.id, isCollection]);
+  }, [tab, node.id, node.title, isCollection]);
+
+  useEffect(() => {
+    if (tab !== 'community') return;
+    Lib.tpdbSearchUrl(node).then(setTpdbLink);
+  }, [tab, node.id, node.title]);
 
   function apply(kind: 'poster' | 'backdrop', url: string) {
     if (!url) return;
@@ -42,6 +51,11 @@ export function ArtEditor({
     else Lib.setOverride(node.id, { backdrop: url });
     onSaved?.();
     onClose();
+  }
+
+  async function resolveCommunity() {
+    const urls = await Lib.resolveArtUrl(communityUrl.trim());
+    setCommunityImgs(urls);
   }
 
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -71,20 +85,17 @@ export function ArtEditor({
     reader.readAsDataURL(file);
   }
 
+  const showPosters = artTab === 'poster' || focus === 'both';
+  const showBackdrops = artTab === 'backdrop' || focus === 'both';
+
   return (
     <div className="modal-scrim" onClick={onClose}>
       <div className="modal wide" onClick={(e) => e.stopPropagation()}>
         <h3>Artwork · {node.title}</h3>
         <div className="sub">
           {isCollection
-            ? focus === 'poster'
-              ? 'Set the collection poster shown on cards — upload or paste an image link.'
-              : 'Set a custom collection poster/cover — upload, paste a link, or pick from TMDB.'
-            : focus === 'poster'
-              ? 'Choose a poster. Changes apply everywhere this title appears.'
-              : focus === 'backdrop'
-                ? 'Choose a backdrop. Changes apply everywhere this title appears.'
-                : 'Choose a poster, backdrop, or both. Changes apply everywhere this title appears.'}
+            ? 'Set collection artwork — official TMDB picks, community posters, or your own image.'
+            : 'Choose a poster or backdrop. Changes apply everywhere this title appears.'}
         </div>
 
         {!isCollection && focus === 'both' && (
@@ -105,11 +116,12 @@ export function ArtEditor({
           <button className={tab === 'url' ? 'on' : ''} onClick={() => setTab('url')}>
             Image link
           </button>
-          {!isCollection && (
-            <button className={tab === 'official' ? 'on' : ''} onClick={() => setTab('official')}>
-              TMDB picks
-            </button>
-          )}
+          <button className={tab === 'official' ? 'on' : ''} onClick={() => setTab('official')}>
+            Official picks
+          </button>
+          <button className={tab === 'community' ? 'on' : ''} onClick={() => setTab('community')}>
+            Community
+          </button>
         </div>
 
         {tab === 'upload' && (
@@ -149,14 +161,14 @@ export function ArtEditor({
           </div>
         )}
 
-        {tab === 'official' && (
-          loadingImgs ? (
+        {tab === 'official' &&
+          (loadingImgs ? (
             <div className="searching" style={{ padding: '30px 0', justifyContent: 'center' }}>
               {I.spark({})}Loading artwork…
             </div>
           ) : imgs && (imgs.posters.length || imgs.backdrops.length) ? (
             <div>
-              {(artTab === 'poster' || focus === 'both') && imgs.posters.length > 0 && (
+              {showPosters && imgs.posters.length > 0 && (
                 <>
                   <div className="result-head">Posters</div>
                   <div className="art-grid posters">
@@ -168,7 +180,7 @@ export function ArtEditor({
                   </div>
                 </>
               )}
-              {(artTab === 'backdrop' || focus === 'both') && imgs.backdrops.length > 0 && (
+              {showBackdrops && imgs.backdrops.length > 0 && (
                 <>
                   <div className="result-head">Backdrops</div>
                   <div className="art-grid backs">
@@ -183,9 +195,49 @@ export function ArtEditor({
             </div>
           ) : (
             <div className="empty" style={{ padding: '24px 0' }}>
-              {Lib.connected ? 'No official artwork found. Try a direct image link.' : 'Connect TMDB in Connections for official artwork picks.'}
+              {Lib.connected
+                ? 'No official artwork found for this title. Try Community or paste a direct image link.'
+                : 'Orbit server TMDB is not configured yet. Paste an image URL or use Community.'}
             </div>
-          )
+          ))}
+
+        {tab === 'community' && (
+          <div>
+            <p className="conns-sub" style={{ marginBottom: 12 }}>
+              Paste a poster URL from <strong>ThePosterDB</strong> or any image host. Or search TPDb and copy a poster
+              link back here.
+            </p>
+            {tpdbLink && (
+              <div className="modal-actions" style={{ marginBottom: 12 }}>
+                <a className="conns-btn sm" href={tpdbLink} target="_blank" rel="noreferrer">
+                  Search ThePosterDB for “{node.title}”
+                </a>
+              </div>
+            )}
+            <div className="field">
+              <label>Poster / backdrop URL</label>
+              <input
+                value={communityUrl}
+                onChange={(e) => setCommunityUrl(e.target.value)}
+                placeholder="https://theposterdb.com/api/assets/…/view"
+                onKeyDown={(e) => e.key === 'Enter' && resolveCommunity()}
+              />
+            </div>
+            <div className="modal-actions">
+              <button className="btn primary" disabled={!communityUrl.trim()} onClick={resolveCommunity}>
+                Preview
+              </button>
+            </div>
+            {communityImgs.length > 0 && (
+              <div className="art-grid posters" style={{ marginTop: 12 }}>
+                {communityImgs.map((u, i) => (
+                  <button key={i} className="art-opt" onClick={() => apply(artTab, u)}>
+                    <img src={u} alt="" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {current && (

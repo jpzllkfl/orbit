@@ -262,27 +262,29 @@ export function ConnectionsView({
         <div className="conns-card">
           <div className="conns-card-h">
             <span className="conns-pill">{ic.image({})}Artwork · TMDB</span>
-            <span className={'conns-state' + (Lib.connected ? ' on' : '')}>{Lib.connected ? 'Live' : 'Optional'}</span>
+            <span className={'conns-state' + (Lib.connected ? ' on' : '')}>{Lib.connected ? 'Live' : 'Set server key'}</span>
           </div>
           <p className="conns-p">
-            {Lib.connected ? 'Extra posters and synopses from TMDB.' : 'Optional free key for richer artwork on top of Plex.'}
+            {Lib.connected
+              ? 'Built into Orbit — posters, backdrops, cast, and synopses work automatically (movies & shows).'
+              : 'Add ORBIT_TMDB_API_KEY to your Orbit Docker stack once. Users should not need to paste a key here.'}
           </p>
           <div className="conns-field">
             <input
               value={tmdbKey}
               onChange={(e) => setTmdbKey(e.target.value)}
               onBlur={() => { if (tmdbKey.trim()) Lib.setKey(tmdbKey.trim()); }}
-              placeholder="TMDB v3 key or v4 token"
+              placeholder="Optional personal TMDB override"
             />
           </div>
           <div className="conns-actions">
-            {Lib.connected && (
+            {Lib.key && (
               <button className="conns-btn danger sm" onClick={disconnectTmdb}>
-                Disconnect
+                Clear override
               </button>
             )}
             <button className="conns-btn primary sm" disabled={!tmdbKey.trim()} onClick={saveTmdb}>
-              {Lib.connected ? 'Update' : 'Connect'}
+              {Lib.key ? 'Save override' : 'Save override'}
             </button>
           </div>
         </div>

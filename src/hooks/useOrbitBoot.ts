@@ -69,6 +69,7 @@ export function useOrbitBoot(opts: {
         if (!alive) return;
         Plex.reloadFromStorage();
         Lib.reloadFromStorage();
+        Lib.refreshServerTmdb?.();
         const connState = Conn.load();
         if (connState?.connected) {
           try {

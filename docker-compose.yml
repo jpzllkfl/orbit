@@ -13,6 +13,8 @@ services:
       ORBIT_DOCKER: "1"
       ORBIT_OMS_AUTO_SEED: "1"
       ORBIT_MEDIA_ROOT: ${ORBIT_MEDIA_ROOT:-/mnt/tank/media}
+      # Free TMDB v3 key — artwork/metadata work out of the box (like Plex). Get one at themoviedb.org/settings/api
+      ORBIT_TMDB_API_KEY: ${ORBIT_TMDB_API_KEY:-}
     user: "0:0"
     entrypoint:
       - /bin/sh

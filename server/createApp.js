@@ -6,7 +6,10 @@ import { createAuthRouter } from './auth-router.js';
 import { lanAddresses } from './network.js';
 import { createMediaRouter } from './media/router.js';
 import { mediaStats } from './media/db.js';
+import { createArtRouter } from './art-router.js';
 import { createPlexRouter } from './plex-proxy.js';
+import { createTmdbRouter } from './tmdb-router.js';
+import { isTmdbConfigured } from './tmdb-config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.join(__dirname, '..', 'dist');
@@ -46,6 +49,7 @@ export function createApp() {
     res.json({
       plexProxy: true,
       mediaServer: true,
+      tmdb: { available: isTmdbConfigured() },
       version: '1.0',
       proxyBuild: '2025-06-08',
       native: !!process.env.ORBIT_NATIVE,
@@ -63,6 +67,8 @@ export function createApp() {
 
   app.use('/api/plex', createPlexRouter());
   app.use('/api/media', createMediaRouter());
+  app.use('/api/tmdb', createTmdbRouter());
+  app.use('/api/art', createArtRouter());
   app.use('/api/auth', createAuthRouter());
 
   if (hasDist) {

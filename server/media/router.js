@@ -10,6 +10,7 @@ import { DEFAULT_OMS_LIBRARIES } from './catalog.js';
 import { scanAllLibraries, seedDefaultLibraries } from './seed.js';
 import { streamMediaItem } from './stream.js';
 import { ensureOmsTranscode, serveTranscodeFile } from './transcode.js';
+import { resolveTmdbKey } from '../tmdb-config.js';
 
 export function createMediaRouter() {
   const router = Router();
@@ -76,14 +77,15 @@ export function createMediaRouter() {
 
   router.post('/match', async (req, res) => {
     const { tmdbKey, libraryId } = req.body || {};
-    if (!tmdbKey) {
-      res.status(400).json({ error: 'TMDB API key is required.' });
+    const key = resolveTmdbKey(tmdbKey);
+    if (!key) {
+      res.status(400).json({ error: 'TMDB is not configured on this Orbit server.' });
       return;
     }
     try {
       const result = libraryId
-        ? await matchLibrary(libraryId, tmdbKey)
-        : await matchAllLibraries(tmdbKey);
+        ? await matchLibrary(libraryId, key)
+        : await matchAllLibraries(key);
       res.json({ ok: true, ...result });
     } catch (e) {
       res.status(400).json({ error: e.message || 'Match failed.' });
