@@ -6,6 +6,8 @@ import { listShowEpisodes, listShowSeasons } from './episodes.js';
 import { buildOrbitTreeFromOms } from './importTree.js';
 import { matchAllLibraries, matchLibrary } from './matcher.js';
 import { listItems, scanLibrary } from './scanner.js';
+import { DEFAULT_OMS_LIBRARIES } from './catalog.js';
+import { scanAllLibraries, seedDefaultLibraries } from './seed.js';
 import { streamMediaItem } from './stream.js';
 
 export function createMediaRouter() {
@@ -106,6 +108,47 @@ export function createMediaRouter() {
     } catch (e) {
       if (!res.headersSent) res.status(500).json({ error: e.message || 'Stream failed.' });
     }
+  });
+
+  router.get('/catalog', (_req, res) => {
+    res.json({ libraries: DEFAULT_OMS_LIBRARIES });
+  });
+
+  router.post('/libraries/seed', (_req, res) => {
+    try {
+      const result = seedDefaultLibraries();
+      res.json({ ok: true, ...result, libraries: listLibraries() });
+    } catch (e) {
+      res.status(400).json({ error: e.message || 'Could not seed libraries.' });
+    }
+  });
+
+  router.post('/libraries/scan-all', (_req, res) => {
+    try {
+      const results = scanAllLibraries();
+      res.json({ ok: true, results, libraries: listLibraries() });
+    } catch (e) {
+      res.status(400).json({ error: e.message || 'Scan all failed.' });
+    }
+  });
+
+  router.get('/libraries/scan-all/stream', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+
+    const send = (data) => {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    try {
+      const results = scanAllLibraries((ev) => send({ type: 'progress', ...ev }));
+      send({ type: 'done', results, libraries: listLibraries() });
+    } catch (e) {
+      send({ type: 'error', error: e.message || 'Scan all failed.' });
+    }
+    res.end();
   });
 
   router.get('/libraries', (_req, res) => {

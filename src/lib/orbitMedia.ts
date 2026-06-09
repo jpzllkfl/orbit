@@ -57,6 +57,19 @@ export const OrbitMedia = {
     return api('/import-tree');
   },
 
+  async seedLibraries(): Promise<{
+    ok: boolean;
+    added: unknown[];
+    missing: unknown[];
+    libraries: MediaLibrary[];
+  }> {
+    return api('/libraries/seed', { method: 'POST' });
+  },
+
+  async scanAllLibraries(): Promise<{ ok: boolean; results: unknown[]; libraries: MediaLibrary[] }> {
+    return api('/libraries/scan-all', { method: 'POST' });
+  },
+
   async matchTmdb(tmdbKey: string, libraryId?: string): Promise<{ ok: boolean; matched: number }> {
     return api('/match', {
       method: 'POST',

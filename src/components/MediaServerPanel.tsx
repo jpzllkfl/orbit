@@ -86,6 +86,42 @@ export function MediaServerPanel({
     }
   }
 
+  async function setupTrueNasLibraries() {
+    setBusy(true);
+    setError('');
+    setImportMsg('Adding TrueNAS library paths…');
+    try {
+      const seed = await OrbitMedia.seedLibraries();
+      const added = seed.added?.length ?? 0;
+      const missing = seed.missing?.length ?? 0;
+      if (missing > 0) {
+        setImportMsg(
+          `Added ${added} libraries. ${missing} folders not mounted in Docker — update Dockge compose volumes and redeploy.`,
+        );
+      } else {
+        setImportMsg(`Added ${added} libraries. Scanning all folders…`);
+      }
+      await reload();
+      if (added > 0 || (seed.libraries?.length ?? 0) > 0) {
+        setImportMsg('Scanning all libraries (this may take a while)…');
+        await OrbitMedia.scanAllLibraries();
+        await reload();
+        const result = await fetchOmsTree();
+        if (result.tree) {
+          const merged = mergeOmsIntoTree(tree, result.tree);
+          onImported?.(merged);
+          setImportMsg(
+            `Direct play ready — ${result.libraryCount ?? 0} libraries, ${result.titleCount ?? 0} titles indexed and imported.`,
+          );
+        }
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Setup failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function matchTmdb() {
     const key = Lib.key;
     if (!key) {
@@ -150,9 +186,16 @@ export function MediaServerPanel({
         <span className={'conns-state' + (status?.ok ? ' on' : '')}>{status?.ok ? 'Beta' : 'Offline'}</span>
       </div>
       <p className="conns-p">
-        Connect folders on this server directly to Orbit — no Plex required. Add library paths, scan files, and build your
-        own media index here. Plex libraries can stay connected during the transition.
+        Direct play from your TrueNAS media share — no Plex required. One-click setup adds Anime, Comedy, Movies, TV,
+        remote drives, and the rest. Plex can stay connected as a fallback only.
       </p>
+      {status?.ok && (
+        <div style={{ marginBottom: 14 }}>
+          <button type="button" className="conns-btn primary oms-browse-btn" disabled={busy} onClick={setupTrueNasLibraries}>
+            {ic.orbit({})} Set up TrueNAS direct play (all libraries)
+          </button>
+        </div>
+      )}
       {status?.ok && (
         <div className="oms-import-bar" style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
           <p className="conns-sub" style={{ margin: 0, flex: 1 }}>

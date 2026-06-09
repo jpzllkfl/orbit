@@ -1,3 +1,6 @@
+# TrueNAS / Dockge — set ORBIT_MEDIA_ROOT in .env if your pool path differs
+# Windows T: = \\192.168.1.177\media → usually /mnt/tank/media on TrueNAS
+
 services:
   orbit:
     build: .
@@ -8,25 +11,35 @@ services:
     environment:
       PORT: 8090
       ORBIT_DOCKER: "1"
+      ORBIT_OMS_AUTO_SEED: "1"
+      ORBIT_MEDIA_ROOT: ${ORBIT_MEDIA_ROOT:-/mnt/tank/media}
     user: "0:0"
     entrypoint:
       - /bin/sh
       - -c
       - mkdir -p /app/server/data/states && chmod -R 777 /app/server/data && exec node server/index.js
     volumes:
-      # Bind mount avoids TrueNAS named-volume permission issues; lives in stack folder
       - ./data:/app/server/data
-      # Mount your media folders here (paths in Orbit must match container paths)
-      # - "D:/Media/Movies:/media/movies:ro"
-      # - "D:/Media/TV:/media/tv:ro"
+      # --- TrueNAS media share (\\192.168.1.177\media) ---
+      - ${ORBIT_MEDIA_ROOT:-/mnt/tank/media}/Anime:/media/anime:ro
+      - ${ORBIT_MEDIA_ROOT:-/mnt/tank/media}/Comedy:/media/comedy:ro
+      - ${ORBIT_MEDIA_ROOT:-/mnt/tank/media}/Documentaries:/media/documentaries:ro
+      - "${ORBIT_MEDIA_ROOT:-/mnt/tank/media}/Kids Movies:/media/kids-movies:ro"
+      - "${ORBIT_MEDIA_ROOT:-/mnt/tank/media}/Kids TV:/media/kids-tv:ro"
+      - ${ORBIT_MEDIA_ROOT:-/mnt/tank/media}/movies:/media/movies:ro
+      - ${ORBIT_MEDIA_ROOT:-/mnt/tank/media}/tv:/media/tv:ro
+      - ${ORBIT_MEDIA_ROOT:-/mnt/tank/media}/remote:/media/remote:ro
+      - ${ORBIT_MEDIA_ROOT:-/mnt/tank/media}/remote_d:/media/remote-d:ro
+      - ${ORBIT_MEDIA_ROOT:-/mnt/tank/media}/remote_E:/media/remote-e:ro
+      - ${ORBIT_MEDIA_ROOT:-/mnt/tank/media}/remote_I:/media/remote-i:ro
+      - ${ORBIT_MEDIA_ROOT:-/mnt/tank/media}/remote_J:/media/remote-j:ro
+      - ${ORBIT_MEDIA_ROOT:-/mnt/tank/media}/remote_L:/media/remote-l:ro
     restart: unless-stopped
     extra_hosts:
-      # Plex on the Docker host (same PC) — container reaches it via this hostname
       - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8090/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 15s
-
+      start_period: 30s
