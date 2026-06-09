@@ -30,6 +30,10 @@ export interface OrbitNode {
   backdrop?: string;
   plexKey?: string;
   partKey?: string | null;
+  /** Orbit Media Server file id (direct play). */
+  omsItemId?: string;
+  omsPath?: string;
+  omsLibraryId?: string;
   duration?: number | null;
   videoCodec?: string;
   audioCodec?: string;

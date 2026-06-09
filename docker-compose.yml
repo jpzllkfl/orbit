@@ -8,9 +8,14 @@ services:
     environment:
       PORT: 8090
       ORBIT_DOCKER: "1"
+    user: "0:0"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - mkdir -p /app/server/data/states && chmod -R 777 /app/server/data && exec node server/index.js
     volumes:
-      # Account login + cloud sync state — survives image rebuilds
-      - orbit-data:/app/server/data
+      # Bind mount avoids TrueNAS named-volume permission issues; lives in stack folder
+      - ./data:/app/server/data
       # Mount your media folders here (paths in Orbit must match container paths)
       # - "D:/Media/Movies:/media/movies:ro"
       # - "D:/Media/TV:/media/tv:ro"
@@ -25,5 +30,3 @@ services:
       retries: 3
       start_period: 15s
 
-volumes:
-  orbit-data:

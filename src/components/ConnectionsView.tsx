@@ -21,12 +21,14 @@ export function ConnectionsView({
   onDisconnect,
   onBump,
   onAccountChange,
+  onOmsImport,
 }: {
   tree: OrbitNode;
   onOpenWizard: () => void;
   onDisconnect?: () => void;
   onBump?: () => void;
   onAccountChange?: () => void;
+  onOmsImport?: (merged: OrbitNode) => void;
 }) {
   const conn = Conn.load();
   const libs = (tree.children || []).filter((n) => n.type === 'library');
@@ -110,7 +112,7 @@ export function ConnectionsView({
       </div>
 
       <div className="conns-grid">
-        <MediaServerPanel />
+        <MediaServerPanel tree={tree} onImported={onOmsImport} />
 
         <div className="conns-card wide orbit-acct-card">
           <div className="conns-card-h">

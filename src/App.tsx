@@ -364,6 +364,18 @@ export default function App() {
   const activeLibId = path.length >= 2 && !query.trim() ? path[1] : null;
   const connected = Conn.connected || Lib.connected || Plex.connected;
 
+  function onOmsImport(merged: OrbitNode) {
+    TreeStore.save(merged);
+    setTree(merged);
+    setPath([merged.id]);
+    liveTreeRef.current = treeHasContent(merged);
+    setLibraryReady(treeHasContent(merged));
+    invalidateTitleIndex();
+    resetAppStateCache(false);
+    if (OrbitAccount.signedIn) OrbitAccount.pushSync().catch(() => {});
+    setVer((v) => v + 1);
+  }
+
   function onWizardComplete(result: WizardResult) {
     if (result.tree) {
       if (!result.demo) {
@@ -1042,6 +1054,7 @@ export default function App() {
                 onDisconnect={onDisconnect}
                 onBump={() => setVer((v) => v + 1)}
                 onAccountChange={reloadFromStorage}
+                onOmsImport={onOmsImport}
               />
             </Suspense>
           ) : view === 'settings' ? (

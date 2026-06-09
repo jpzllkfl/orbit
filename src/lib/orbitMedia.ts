@@ -52,4 +52,8 @@ export const OrbitMedia = {
     const q = path ? '?path=' + encodeURIComponent(path) : '';
     return api<BrowseResult>('/browse' + q);
   },
+
+  async importTree(): Promise<{ tree: import('../types/orbit').OrbitNode; titleCount: number; libraryCount: number }> {
+    return api('/import-tree');
+  },
 };

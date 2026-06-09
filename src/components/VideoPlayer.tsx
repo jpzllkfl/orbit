@@ -119,7 +119,11 @@ function shouldResume() {
   return loadSettings().playback.resumePlayback !== false;
 }
 
-async function plexStream(node: OrbitNode, q: string) {
+async function mediaStream(node: OrbitNode, q: string) {
+  if (node.omsItemId) {
+    const { omsStreamUrl } = await import('../lib/importLibraryFromOms');
+    return { mode: 'direct', url: omsStreamUrl(node.omsItemId), fallbackUrl: null };
+  }
   try {
     if (Plex.connected && (node.partKey || node.plexKey)) return await Plex.resolveStream(node, q || 'auto');
   } catch {
@@ -335,7 +339,7 @@ export function VideoPlayer({
       let url: string | null = null;
       if (Plex.connected) {
         await Plex.startPlaybackSession();
-        const info = await plexStream(pn, 'auto');
+        const info = await mediaStream(pn, 'auto');
         url = info.url;
         streamFallback.current = info.fallbackUrl || null;
         streamModeRef.current = info.mode === 'direct' ? 'direct' : 'transcode';
@@ -389,7 +393,7 @@ export function VideoPlayer({
         for (let i = start; i < TRANSCODE_FALLBACKS.length; i++) {
           qualityFallbackIdx.current = i + 1;
           const qid = TRANSCODE_FALLBACKS[i];
-          const info = await plexStream(pn, qid);
+          const info = await mediaStream(pn, qid);
           if (info.url) {
             streamFallback.current = info.fallbackUrl || null;
             streamModeRef.current = 'transcode';
@@ -753,7 +757,7 @@ export function VideoPlayer({
     streamFailCooldown.current = 0;
     void Plex.stopPlayback()
       .then(() => Plex.startPlaybackSession())
-      .then(() => plexStream(pn, q.id))
+      .then(() => mediaStream(pn, q.id))
       .then((info) => {
         streamFallback.current = info.fallbackUrl || null;
         streamModeRef.current = info.mode === 'direct' ? 'direct' : 'transcode';

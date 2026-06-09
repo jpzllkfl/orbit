@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
+import { fetchOmsTree, mergeOmsIntoTree } from '../lib/importLibraryFromOms';
 import { OrbitMedia } from '../lib/orbitMedia';
 import type { MediaLibrary, MediaServerStatus } from '../types/media';
+import type { OrbitNode } from '../types/orbit';
 import { FolderBrowserModal } from './FolderBrowserModal';
 import { Icons } from './icons';
 
@@ -10,7 +12,13 @@ function canNativeFolderPick() {
   return typeof window !== 'undefined' && typeof window.orbitNative?.pickFolder === 'function';
 }
 
-export function MediaServerPanel() {
+export function MediaServerPanel({
+  tree,
+  onImported,
+}: {
+  tree: OrbitNode;
+  onImported?: (merged: OrbitNode) => void;
+}) {
   const [status, setStatus] = useState<MediaServerStatus | null>(null);
   const [libraries, setLibraries] = useState<MediaLibrary[]>([]);
   const [busy, setBusy] = useState(false);
@@ -20,6 +28,7 @@ export function MediaServerPanel() {
   const [type, setType] = useState<'movie' | 'tv'>('movie');
   const [rootPath, setRootPath] = useState('/media/movies');
   const [browseOpen, setBrowseOpen] = useState(false);
+  const [importMsg, setImportMsg] = useState('');
 
   const reload = useCallback(async () => {
     try {
@@ -76,6 +85,25 @@ export function MediaServerPanel() {
     }
   }
 
+  async function importToOrbit() {
+    setBusy(true);
+    setError('');
+    setImportMsg('');
+    try {
+      const result = await fetchOmsTree();
+      if (!result.tree) throw new Error(result.error || 'Nothing to import');
+      const merged = mergeOmsIntoTree(tree, result.tree);
+      onImported?.(merged);
+      setImportMsg(
+        `Added ${result.libraryCount ?? 0} librar${result.libraryCount === 1 ? 'y' : 'ies'} · ${result.titleCount ?? 0} titles to Orbit.`,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Import failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function pickFolder() {
     if (canNativeFolderPick()) {
       try {
@@ -106,11 +134,19 @@ export function MediaServerPanel() {
         own media index here. Plex libraries can stay connected during the transition.
       </p>
       {status?.ok && (
-        <p className="conns-sub" style={{ marginBottom: 12 }}>
-          {status.libraries} librar{status.libraries === 1 ? 'y' : 'ies'} · {status.items.toLocaleString()} indexed file
-          {status.items === 1 ? '' : 's'}
-        </p>
+        <div className="oms-import-bar" style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+          <p className="conns-sub" style={{ margin: 0, flex: 1 }}>
+            {status.libraries} librar{status.libraries === 1 ? 'y' : 'ies'} · {status.items.toLocaleString()} indexed file
+            {status.items === 1 ? '' : 's'}
+          </p>
+          {status.items > 0 && (
+            <button type="button" className="conns-btn primary sm" disabled={busy} onClick={importToOrbit}>
+              {ic.spark({})} Import to Orbit library
+            </button>
+          )}
+        </div>
       )}
+      {importMsg && <p className="conns-sub" style={{ color: 'var(--cool)', marginBottom: 12 }}>{importMsg}</p>}
 
       <div className="oms-add">
         <div className="oms-row">

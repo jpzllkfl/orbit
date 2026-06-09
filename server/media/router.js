@@ -2,7 +2,9 @@ import { Router } from 'express';
 import { browseDir, browseRoots } from './browse.js';
 import { mediaStats } from './db.js';
 import { addLibrary, getLibrary, listLibraries, removeLibrary } from './libraries.js';
+import { buildOrbitTreeFromOms } from './importTree.js';
 import { listItems, scanLibrary } from './scanner.js';
+import { streamMediaItem } from './stream.js';
 
 export function createMediaRouter() {
   const router = Router();
@@ -35,6 +37,27 @@ export function createMediaRouter() {
       res.json(browseDir(p || null));
     } catch (e) {
       res.status(400).json({ error: e.message || 'Cannot browse folder.' });
+    }
+  });
+
+  router.get('/import-tree', (_req, res) => {
+    try {
+      const result = buildOrbitTreeFromOms();
+      if (!result.tree) {
+        res.status(404).json({ error: 'No scanned libraries yet. Add folders and run Scan first.' });
+        return;
+      }
+      res.json(result);
+    } catch (e) {
+      res.status(500).json({ error: e.message || 'Could not build library tree.' });
+    }
+  });
+
+  router.get('/stream/:id', (req, res) => {
+    try {
+      streamMediaItem(req, res, req.params.id);
+    } catch (e) {
+      if (!res.headersSent) res.status(500).json({ error: e.message || 'Stream failed.' });
     }
   });
 
