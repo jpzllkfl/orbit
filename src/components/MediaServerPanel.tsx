@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Lib } from '../lib';
 import { fetchOmsTree, mergeOmsIntoTree } from '../lib/importLibraryFromOms';
 import { OrbitMedia } from '../lib/orbitMedia';
 import type { MediaLibrary, MediaServerStatus } from '../types/media';
@@ -85,6 +86,25 @@ export function MediaServerPanel({
     }
   }
 
+  async function matchTmdb() {
+    const key = Lib.key;
+    if (!key) {
+      setError('Add your TMDB key in Connections → Artwork first.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setImportMsg('');
+    try {
+      const result = await OrbitMedia.matchTmdb(key);
+      setImportMsg(`TMDB matched ${result.matched} title${result.matched === 1 ? '' : 's'}. Re-import to refresh artwork.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'TMDB match failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function importToOrbit() {
     setBusy(true);
     setError('');
@@ -140,9 +160,14 @@ export function MediaServerPanel({
             {status.items === 1 ? '' : 's'}
           </p>
           {status.items > 0 && (
-            <button type="button" className="conns-btn primary sm" disabled={busy} onClick={importToOrbit}>
-              {ic.spark({})} Import to Orbit library
-            </button>
+            <>
+              <button type="button" className="conns-btn sm" disabled={busy} onClick={matchTmdb}>
+                {ic.image({})} Match TMDB
+              </button>
+              <button type="button" className="conns-btn primary sm" disabled={busy} onClick={importToOrbit}>
+                {ic.spark({})} Import to Orbit library
+              </button>
+            </>
           )}
         </div>
       )}

@@ -56,4 +56,41 @@ export const OrbitMedia = {
   async importTree(): Promise<{ tree: import('../types/orbit').OrbitNode; titleCount: number; libraryCount: number }> {
     return api('/import-tree');
   },
+
+  async matchTmdb(tmdbKey: string, libraryId?: string): Promise<{ ok: boolean; matched: number }> {
+    return api('/match', {
+      method: 'POST',
+      body: JSON.stringify({ tmdbKey, libraryId }),
+    });
+  },
+
+  async showSeasons(libraryId: string, showTitle: string): Promise<Array<{ season: number; title: string; episodes: number }>> {
+    const q =
+      '?libraryId=' +
+      encodeURIComponent(libraryId) +
+      '&show=' +
+      encodeURIComponent(showTitle);
+    const { seasons } = await api<{ seasons: Array<{ season: number; title: string; episodes: number }> }>(
+      '/shows/seasons' + q,
+    );
+    return seasons;
+  },
+
+  async showEpisodes(
+    libraryId: string,
+    showTitle: string,
+    season: number,
+  ): Promise<Array<{ id: string; season: number; episode: number; title: string }>> {
+    const q =
+      '?libraryId=' +
+      encodeURIComponent(libraryId) +
+      '&show=' +
+      encodeURIComponent(showTitle) +
+      '&season=' +
+      season;
+    const { episodes } = await api<{ episodes: Array<{ id: string; season: number; episode: number; title: string }> }>(
+      '/shows/episodes' + q,
+    );
+    return episodes;
+  },
 };

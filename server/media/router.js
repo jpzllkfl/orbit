@@ -2,7 +2,9 @@ import { Router } from 'express';
 import { browseDir, browseRoots } from './browse.js';
 import { mediaStats } from './db.js';
 import { addLibrary, getLibrary, listLibraries, removeLibrary } from './libraries.js';
+import { listShowEpisodes, listShowSeasons } from './episodes.js';
 import { buildOrbitTreeFromOms } from './importTree.js';
+import { matchAllLibraries, matchLibrary } from './matcher.js';
 import { listItems, scanLibrary } from './scanner.js';
 import { streamMediaItem } from './stream.js';
 
@@ -37,6 +39,51 @@ export function createMediaRouter() {
       res.json(browseDir(p || null));
     } catch (e) {
       res.status(400).json({ error: e.message || 'Cannot browse folder.' });
+    }
+  });
+
+  router.get('/shows/seasons', (req, res) => {
+    try {
+      const libraryId = typeof req.query.libraryId === 'string' ? req.query.libraryId : '';
+      const show = typeof req.query.show === 'string' ? req.query.show : '';
+      if (!libraryId || !show) {
+        res.status(400).json({ error: 'libraryId and show are required.' });
+        return;
+      }
+      res.json({ seasons: listShowSeasons(libraryId, show) });
+    } catch (e) {
+      res.status(500).json({ error: e.message || 'Could not list seasons.' });
+    }
+  });
+
+  router.get('/shows/episodes', (req, res) => {
+    try {
+      const libraryId = typeof req.query.libraryId === 'string' ? req.query.libraryId : '';
+      const show = typeof req.query.show === 'string' ? req.query.show : '';
+      const season = Number(req.query.season);
+      if (!libraryId || !show || !season) {
+        res.status(400).json({ error: 'libraryId, show, and season are required.' });
+        return;
+      }
+      res.json({ episodes: listShowEpisodes(libraryId, show, season) });
+    } catch (e) {
+      res.status(500).json({ error: e.message || 'Could not list episodes.' });
+    }
+  });
+
+  router.post('/match', async (req, res) => {
+    const { tmdbKey, libraryId } = req.body || {};
+    if (!tmdbKey) {
+      res.status(400).json({ error: 'TMDB API key is required.' });
+      return;
+    }
+    try {
+      const result = libraryId
+        ? await matchLibrary(libraryId, tmdbKey)
+        : await matchAllLibraries(tmdbKey);
+      res.json({ ok: true, ...result });
+    } catch (e) {
+      res.status(400).json({ error: e.message || 'Match failed.' });
     }
   });
 

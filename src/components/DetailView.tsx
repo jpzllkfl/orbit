@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type SVGProps } from 'react';
 import { Lib, Meta, Plex, Progress } from '../lib';
+import { OrbitMedia } from '../lib/orbitMedia';
 import type { Episode, OrbitNode } from '../types/orbit';
 import { ArtView, SmartLandscape, SmartPoster, useArt } from './Posters';
 
@@ -328,7 +329,15 @@ export function DetailView({
     if (!isShow) return;
     (async () => {
       let rows: Array<{ season: number; title: string; poster: string | null; episodes: number }> = [];
-      if (node.plexKey && Plex.connected) {
+      if (node.omsLibraryId && node.omsShowTitle) {
+        try {
+          const oms = await OrbitMedia.showSeasons(node.omsLibraryId, node.omsShowTitle);
+          if (oms.length) rows = oms.map((s) => ({ ...s, poster: null }));
+        } catch {
+          /* fallback */
+        }
+      }
+      if (!rows.length && node.plexKey && Plex.connected) {
         try {
           const ps = await Plex.fetchSeasons(node.plexKey);
           if (ps.length) rows = ps;
@@ -359,7 +368,7 @@ export function DetailView({
     return () => {
       alive = false;
     };
-  }, [node.id, node.plexKey, node.seasons, isShow]);
+  }, [node.id, node.plexKey, node.omsLibraryId, node.omsShowTitle, node.seasons, isShow]);
 
   useEffect(() => {
     if (!isShow) {
@@ -401,6 +410,25 @@ export function DetailView({
       };
     }
 
+    if (node.omsLibraryId && node.omsShowTitle) {
+      OrbitMedia.showEpisodes(node.omsLibraryId, node.omsShowTitle, season)
+        .then((rows) => {
+          if (!alive || !rows.length) return;
+          setSeasonEps(
+            rows.map((r) => ({
+              n: r.episode,
+              season: r.season,
+              title: r.title,
+              omsItemId: r.id,
+            })),
+          );
+        })
+        .catch(() => {});
+      return () => {
+        alive = false;
+      };
+    }
+
     if (Lib.connected) {
       Lib.fetchSeasonEpisodes(node, season).then((rows) => {
         if (!alive || !rows.length) return;
@@ -420,7 +448,7 @@ export function DetailView({
     return () => {
       alive = false;
     };
-  }, [node.id, season, plexLeaves, isShow, node.plexKey]);
+  }, [node.id, season, plexLeaves, isShow, node.plexKey, node.omsLibraryId, node.omsShowTitle]);
 
   useEffect(() => {
     let alive = true;
@@ -535,6 +563,10 @@ export function DetailView({
     }
     if (resumeEp) {
       onPlay(node, resumeEp);
+      return;
+    }
+    if (node.omsLibraryId && node.omsShowTitle && seasonEps?.[0]) {
+      onPlay(node, { ...seasonEps[0], showTitle: node.title });
       return;
     }
     if (node.plexKey && Plex.connected) {

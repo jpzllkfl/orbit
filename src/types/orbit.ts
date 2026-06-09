@@ -8,6 +8,7 @@ export interface Episode {
   runtime?: number;
   showTitle?: string;
   still?: string | null;
+  omsItemId?: string;
 }
 
 export interface OrbitNode {
@@ -34,6 +35,7 @@ export interface OrbitNode {
   omsItemId?: string;
   omsPath?: string;
   omsLibraryId?: string;
+  omsShowTitle?: string;
   duration?: number | null;
   videoCodec?: string;
   audioCodec?: string;

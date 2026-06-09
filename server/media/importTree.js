@@ -12,7 +12,7 @@ function libKey(name) {
 function allItemsForLibrary(libraryId) {
   return getDb()
     .prepare(
-      `SELECT id, type, title, year, season, episode, show_title, file_path, scanned_at
+      `SELECT id, type, title, year, season, episode, show_title, file_path, scanned_at, tmdb_id
        FROM media_items WHERE library_id = ? ORDER BY title`,
     )
     .all(libraryId);
@@ -24,13 +24,14 @@ function movieNode(row) {
     type: 'movie',
     title: row.title,
     year: row.year || undefined,
+    tmdbId: row.tmdb_id || undefined,
     omsItemId: row.id,
     omsPath: row.file_path,
     addedAt: row.scanned_at || null,
   };
 }
 
-function buildTvChildren(rows) {
+function buildTvChildren(rows, libraryId) {
   const byShow = new Map();
   for (const row of rows) {
     const showName = (row.show_title || row.title || 'Unknown').trim();
@@ -42,11 +43,15 @@ function buildTvChildren(rows) {
   for (const [showTitle, eps] of byShow) {
     const seasons = new Set(eps.map((e) => e.season).filter((s) => s != null));
     const first = eps[0];
+    const tmdbId = eps.find((e) => e.tmdb_id)?.tmdb_id || undefined;
     shows.push({
       id: newId('s'),
       type: 'show',
       title: showTitle,
       seasons: seasons.size || undefined,
+      tmdbId,
+      omsLibraryId: libraryId,
+      omsShowTitle: showTitle,
       omsItemId: first.id,
       omsPath: first.file_path,
       addedAt: Math.max(...eps.map((e) => e.scanned_at || 0)) || null,
@@ -58,7 +63,7 @@ function buildTvChildren(rows) {
 
 function buildLibraryNode(lib) {
   const rows = allItemsForLibrary(lib.id);
-  const children = lib.type === 'movie' ? rows.map(movieNode) : buildTvChildren(rows);
+  const children = lib.type === 'movie' ? rows.map(movieNode) : buildTvChildren(rows, lib.id);
   return {
     id: newId('lib'),
     type: 'library',

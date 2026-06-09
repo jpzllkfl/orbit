@@ -16,6 +16,7 @@ const KEEP = new Set([
   'omsItemId',
   'omsPath',
   'omsLibraryId',
+  'omsShowTitle',
   'duration',
   'videoCodec',
   'audioCodec',
