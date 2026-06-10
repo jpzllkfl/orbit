@@ -6,6 +6,7 @@ import {
   Lib,
   TreeStore,
   demoAppState,
+  emptyShell,
   importLibraryFromPlex,
   loadAppStateAsync,
   needsPlexImport,
@@ -15,6 +16,7 @@ import {
   treeHasLibraries,
   plexIsConfigured,
 } from '../lib';
+import { FRESH_RESET_KEY } from '../lib/orbitReset';
 import { maybeMergeOmsTree } from '../lib/omsSync';
 import { invalidateTitleIndex } from '../lib/treeIndex';
 import type { OrbitUser } from '../lib/orbitAccount';
@@ -53,18 +55,23 @@ export function useOrbitBoot(opts: {
     setAuthReady(false);
     (async () => {
       try {
+        const freshReset =
+          typeof sessionStorage !== 'undefined' && sessionStorage.getItem(FRESH_RESET_KEY) === '1';
+
         const user = await OrbitAccount.refreshMe();
         if (!alive) return;
         setOrbitUser(user);
         if (user) {
           sessionStorage.removeItem('orbit.guest.v1');
           setGuestMode(false);
-          setBootMsg('Syncing your account…');
-          try {
-            await OrbitAccount.pullSync();
-            resetAppStateCache(false);
-          } catch {
-            /* offline */
+          if (!freshReset) {
+            setBootMsg('Syncing your account…');
+            try {
+              await OrbitAccount.pullSync();
+              resetAppStateCache(false);
+            } catch {
+              /* offline */
+            }
           }
         }
         if (!alive) return;
@@ -96,8 +103,20 @@ export function useOrbitBoot(opts: {
         let state = await loadAppStateAsync();
         if (!alive) return;
 
-        const repairLibraries = plexIsConfigured(Conn.load()) && (await needsLibraryRepair(state.tree));
-        const shouldPlexImport = (needsPlexImport(state.tree) || repairLibraries) && plexIsConfigured(Conn.load());
+        if (freshReset) {
+          const shell = emptyShell();
+          shell.tree.blurb = 'Add libraries in Connections to get started.';
+          await TreeStore.saveImmediate(shell.tree);
+          resetAppStateCache(false);
+          state = shell;
+        }
+
+        const repairLibraries =
+          !freshReset && plexIsConfigured(Conn.load()) && (await needsLibraryRepair(state.tree));
+        const shouldPlexImport =
+          !freshReset &&
+          (needsPlexImport(state.tree) || repairLibraries) &&
+          plexIsConfigured(Conn.load());
 
         if (shouldPlexImport) {
           if (!treeHasContent(state.tree)) {
@@ -156,7 +175,7 @@ export function useOrbitBoot(opts: {
         }
 
         if (!alive) return;
-        if (user) {
+        if (user && !freshReset) {
           const omsMerged = await maybeMergeOmsTree(state.tree);
           if (omsMerged) {
             state = { tree: omsMerged, path: [omsMerged.id] };
@@ -164,6 +183,13 @@ export function useOrbitBoot(opts: {
           }
         }
         if (!alive) return;
+        if (freshReset) {
+          try {
+            sessionStorage.removeItem(FRESH_RESET_KEY);
+          } catch {
+            /* ignore */
+          }
+        }
         await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
         if (!alive) return;
         setTree(state.tree);

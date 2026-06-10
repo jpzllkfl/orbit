@@ -10,6 +10,7 @@ import { resetAppStateCache } from '../lib/appState';
 import { syncOmsAfterChange } from '../lib/omsSync';
 import { displayMediaPath } from '../lib/omsPaths';
 import { resetOrbitInstance } from '../lib/orbitReset';
+import { TreeStore } from '../lib/treeStore';
 import { isUsingRemoteHome } from '../lib/orbitServer';
 import { OrbitMedia } from '../lib/orbitMedia';
 import type { MediaLibrary } from '../types/media';
@@ -265,17 +266,19 @@ export function MediaServerPanel({
     reload();
   }, [reload]);
 
-  async function syncToSidebar(removedLibraryId?: string) {
+  async function syncToSidebar(removedLibraryId?: string, removedLibraryName?: string) {
+    const base = TreeStore.load() ?? tree;
     const result = await fetchOmsTree();
     let merged: OrbitNode;
     if (result.tree) {
-      merged = replaceOmsInTree(tree, result.tree);
-    } else if (removedLibraryId) {
-      merged = removeOmsLibraryFromTree(tree, removedLibraryId);
+      merged = replaceOmsInTree(base, result.tree);
+    } else if (removedLibraryId || removedLibraryName) {
+      merged = removeOmsLibraryFromTree(base, removedLibraryId, removedLibraryName);
     } else {
-      merged = stripOmsFromTree(tree);
+      merged = stripOmsFromTree(base);
     }
     await onImported?.(merged);
+    await syncOmsAfterChange();
   }
 
   async function afterAddLibrary(libraryId: string) {
@@ -286,7 +289,6 @@ export function MediaServerPanel({
       const libs = await OrbitMedia.listLibraries();
       setLibraries(libs);
       const lib = libs.find((l) => l.id === libraryId);
-      await syncOmsAfterChange();
       await syncToSidebar();
       setImportMsg(`"${lib?.name || 'Library'}" updated — check the sidebar.`);
       const st = await OrbitMedia.status();
@@ -305,7 +307,6 @@ export function MediaServerPanel({
       await OrbitMedia.scanLibrary(id);
       await reload();
       await syncToSidebar();
-      await syncOmsAfterChange();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Scan failed');
     } finally {
@@ -320,7 +321,6 @@ export function MediaServerPanel({
       await OrbitMedia.scanAllLibraries();
       await reload();
       await syncToSidebar();
-      await syncOmsAfterChange();
       setImportMsg('All libraries scanned.');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Scan failed');
@@ -335,7 +335,6 @@ export function MediaServerPanel({
     try {
       await OrbitMedia.removeFolder(lib.id, folderId);
       await reload();
-      await syncOmsAfterChange();
       if (status && status.items > 0) await syncToSidebar();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not remove folder');
@@ -345,13 +344,17 @@ export function MediaServerPanel({
   }
 
   async function removeLibrary(id: string) {
-    if (!confirm('Delete this entire library and all its folders?')) return;
+    const lib = libraries.find((l) => l.id === id);
+    if (!confirm(`Delete "${lib?.name || 'this library'}" from Orbit Media Server? Sidebar updates after; Plex libraries stay unless you remove those separately.`)) {
+      return;
+    }
     setBusy(true);
+    setError('');
     try {
       await OrbitMedia.removeLibrary(id);
       await reload();
-      await syncOmsAfterChange();
-      await syncToSidebar(id);
+      await syncToSidebar(id, lib?.name);
+      setImportMsg(`Removed "${lib?.name || 'library'}" — check the sidebar.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not remove library');
     } finally {
@@ -377,7 +380,7 @@ export function MediaServerPanel({
       await onImported?.(freshTree);
       await reload();
       setImportMsg('Everything cleared. Reloading…');
-      window.setTimeout(() => window.location.reload(), 400);
+      window.setTimeout(() => window.location.reload(), 900);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Reset failed');
       setImportMsg('');

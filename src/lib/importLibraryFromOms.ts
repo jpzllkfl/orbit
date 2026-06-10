@@ -59,11 +59,27 @@ export function stripOmsFromTree(existing: OrbitNode): OrbitNode {
   return replaceOmsInTree(existing, { id: 'oms-empty', type: 'collection', title: '', children: [] });
 }
 
-/** Drop one OMS library from the sidebar when import-tree is unavailable. */
-export function removeOmsLibraryFromTree(existing: OrbitNode, libraryId: string): OrbitNode {
-  const children = (existing.children || []).filter(
-    (c) => c.type !== 'library' || c.omsLibraryId !== libraryId,
+function isOmsLibraryNode(c: OrbitNode) {
+  return !!(
+    c.omsLibraryId ||
+    c.title?.endsWith(' (OMS)') ||
+    String(c.blurb || '').includes('Orbit Media Server')
   );
+}
+
+/** Drop one OMS library from the sidebar when import-tree is unavailable. */
+export function removeOmsLibraryFromTree(
+  existing: OrbitNode,
+  libraryId?: string,
+  libraryName?: string,
+): OrbitNode {
+  const nameLower = libraryName?.trim().toLowerCase();
+  const children = (existing.children || []).filter((c) => {
+    if (c.type !== 'library' || !isOmsLibraryNode(c)) return true;
+    if (libraryId && c.omsLibraryId === libraryId) return false;
+    if (nameLower && c.title?.trim().toLowerCase() === nameLower) return false;
+    return true;
+  });
   return { ...existing, children };
 }
 

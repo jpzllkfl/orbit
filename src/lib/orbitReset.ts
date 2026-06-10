@@ -9,6 +9,8 @@ import { slimTreeForMemory } from './treeSlim';
 import { TreeStore } from './treeStore';
 import type { OrbitNode } from '../types/orbit';
 
+export const FRESH_RESET_KEY = 'orbit.freshReset.v1';
+
 const EXTRA_LOCAL_KEYS = [
   'orbit.tree.v1',
   'orbit.conn.v1',
@@ -62,21 +64,25 @@ export async function resetOrbitInstance(): Promise<OrbitNode> {
   if (OrbitAccount.signedIn) {
     try {
       await OrbitAccount.clearCloudSync();
-    } catch {
-      /* fallback */
-    }
-    try {
       await OrbitAccount.pushSyncReplace({
         'orbit.tree.v1': JSON.stringify(slimTreeForMemory(shell.tree)),
         [OMS_LIBS_KEY]: '[]',
       });
-    } catch {
-      /* offline */
+    } catch (e) {
+      throw new Error(
+        e instanceof Error ? e.message : 'Could not clear cloud sync — check your connection and try again.',
+      );
     }
   }
 
   if (!wipe?.ok) {
     throw new Error('Server wipe failed — try again.');
+  }
+
+  try {
+    sessionStorage.setItem(FRESH_RESET_KEY, '1');
+  } catch {
+    /* ignore */
   }
 
   return shell.tree;
