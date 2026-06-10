@@ -1,10 +1,9 @@
 import type { OrbitNode } from '../types/orbit';
 import ORBIT_DATA from './data.js';
 import { Conn } from './conn.ts';
-import { countTitles, plexIsConfigured, seedArtFromPlex, treeHasContent, treeHasLibraries } from './importUtils.ts';
+import { plexIsConfigured, seedArtFromPlex, treeHasContent, treeHasLibraries } from './importUtils.ts';
 
 export { treeHasContent, treeHasLibraries, plexIsConfigured };
-import { isDesktopApp } from './isDesktop.ts';
 import { TreeStore } from './treeStore.ts';
 
 let cached: { tree: OrbitNode; path: string[] } | null = null;
@@ -35,7 +34,8 @@ export function demoAppState(): { tree: OrbitNode; path: string[] } {
 }
 
 function hydrateLoadedTree(saved: OrbitNode) {
-  if (!isDesktopApp() && countTitles(saved) <= 80) seedArtFromPlex(saved);
+  // Seed URL cache from persisted tree so posters show without TMDB round-trips.
+  seedArtFromPlex(saved);
   cached = { tree: saved, path: [saved.id] };
   return cached;
 }

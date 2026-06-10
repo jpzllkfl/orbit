@@ -1,6 +1,6 @@
 import type { OrbitNode } from '../types/orbit';
 import { treeHasContent } from './importUtils.ts';
-import { slimTreeForMemory, stripArtFromJson } from './treeSlim.ts';
+import { slimTreeForMemory } from './treeSlim.ts';
 
 const LS = 'orbit.tree.v1';
 const IDB_NAME = 'orbit.v1';
@@ -85,15 +85,15 @@ async function idbDel(key: string): Promise<void> {
   });
 }
 
-type ParseOpts = { stripArt?: boolean; slim?: boolean };
+type ParseOpts = { slim?: boolean };
 
 function parseAndCache(raw: string, opts: ParseOpts = {}): OrbitNode | null {
-  const payload = opts.stripArt ? stripArtFromJson(raw) : raw;
-  const parsed = JSON.parse(payload) as OrbitNode;
+  const parsed = JSON.parse(raw) as OrbitNode;
   if (!parsed?.id || !parsed?.type) {
     parsedCache = null;
     return null;
   }
+  // slimTreeForMemory drops deep-node art only — parse first so title posters survive.
   parsedCache = opts.slim ? slimTreeForMemory(parsed) : parsed;
   return parsedCache;
 }
@@ -109,7 +109,7 @@ async function ensureIdbReady() {
       const ls = localStorage.getItem(LS);
       if (ls) {
         try {
-          const tree = parseAndCache(ls, { stripArt: true, slim: true });
+          const tree = parseAndCache(ls, { slim: true });
           if (tree) await idbSet(LS, JSON.stringify(tree));
           localStorage.removeItem(LS);
         } catch {
@@ -155,10 +155,7 @@ export const TreeStore = {
     }
     try {
       const alreadySlim = fromIdb || isSlimStoredTree(raw);
-      return parseAndCache(raw, {
-        stripArt: useIdb() && !alreadySlim,
-        slim: useIdb() && !alreadySlim,
-      });
+      return parseAndCache(raw, { slim: useIdb() && !alreadySlim });
     } catch {
       parsedCache = null;
       return null;
@@ -174,7 +171,7 @@ export const TreeStore = {
         return null;
       }
       const alreadySlim = isSlimStoredTree(raw);
-      return parseAndCache(raw, { stripArt: !alreadySlim && useIdb(), slim: !alreadySlim && useIdb() });
+      return parseAndCache(raw, { slim: !alreadySlim && useIdb() });
     } catch {
       parsedCache = null;
       return null;
@@ -184,7 +181,7 @@ export const TreeStore = {
   /** Apply synced tree without duplicating a multi‑MB string in localStorage (desktop). */
   ingestSyncRaw(raw: string): boolean {
     try {
-      const tree = parseAndCache(raw, { stripArt: useIdb(), slim: useIdb() });
+      const tree = parseAndCache(raw, { slim: useIdb() });
       if (!tree) return false;
       if (!treeHasContent(tree)) {
         parsedCache = tree;

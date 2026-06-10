@@ -54,7 +54,7 @@ export function slimTreeForMemory(root: OrbitNode, keepArtDepth = 1): OrbitNode 
   return walk(root, 0);
 }
 
-/** Null out heavy URL fields before parse — keeps valid JSON (deleting keys left `,,` gaps). */
+/** Null out heavy URL fields before parse — legacy helper for scripts; do not use before slimTreeForMemory. */
 export function stripArtFromJson(raw: string): string {
   return raw
     .replace(/"poster":"(?:\\.|[^"\\])*"/g, '"poster":null')
