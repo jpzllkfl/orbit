@@ -12,6 +12,7 @@ on:
       - 'package-lock.json'
       - 'vite.config.js'
       - 'tsconfig*.json'
+      - '.github/workflows/desktop-release.yml'
   workflow_dispatch:
 
 permissions:
@@ -41,10 +42,24 @@ jobs:
         env:
           VITE_PLEX_PROXY: '1'
 
-      - name: Build and publish Windows installer
-        run: npx electron-builder --win nsis --publish always
+      - name: Build Windows installer
+        run: npx electron-builder --win nsis --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-v${{ github.run_number }}
+          name: Orbit Desktop v1.0.${{ github.run_number }}
+          files: |
+            release/Orbit-Setup-*.exe
+            release/latest.yml
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Release summary
+        shell: bash
         run: node -e "console.log('Published', require('./package.json').version)"
