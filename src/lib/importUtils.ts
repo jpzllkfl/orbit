@@ -14,6 +14,13 @@ export function seedArtFromPlex(node: OrbitNode) {
   for (const ch of node.children || []) seedArtFromPlex(ch);
 }
 
+/** Seed art cache from OMS import-tree nodes (server-matched TMDB posters). */
+export function seedArtFromOms(node: OrbitNode) {
+  const art = plexArtFromNode(node);
+  if (art?.poster || art?.backdrop) Lib.seed(node, art);
+  for (const ch of node.children || []) seedArtFromOms(ch);
+}
+
 export function countTitles(root: OrbitNode): number {
   let n = 0;
   (function walk(node: OrbitNode) {

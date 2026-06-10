@@ -1,5 +1,6 @@
 import { getDb } from './db.js';
 import { listLibraries } from './libraries.js';
+import { tmdbImgUrl } from './tmdb.js';
 
 function newId(prefix) {
   return prefix + '_' + Math.random().toString(36).slice(2, 9);
@@ -12,19 +13,31 @@ function libKey(name) {
 function allItemsForLibrary(libraryId) {
   return getDb()
     .prepare(
-      `SELECT id, type, title, year, season, episode, show_title, file_path, scanned_at, tmdb_id
+      `SELECT id, type, title, year, season, episode, show_title, file_path, scanned_at,
+              tmdb_id, poster_path, backdrop_path, overview
        FROM media_items WHERE library_id = ? ORDER BY title`,
     )
     .all(libraryId);
 }
 
+function artFromRow(row) {
+  return {
+    poster: tmdbImgUrl(row.poster_path, 'w500') || undefined,
+    backdrop: tmdbImgUrl(row.backdrop_path, 'w1280') || undefined,
+  };
+}
+
 function movieNode(row) {
+  const art = artFromRow(row);
   return {
     id: row.id,
     type: 'movie',
     title: row.title,
     year: row.year || undefined,
     tmdbId: row.tmdb_id || undefined,
+    poster: art.poster,
+    backdrop: art.backdrop,
+    blurb: row.overview ? String(row.overview).slice(0, 240) : undefined,
     omsItemId: row.id,
     omsPath: row.file_path,
     addedAt: row.scanned_at || null,
@@ -43,13 +56,18 @@ function buildTvChildren(rows, libraryId) {
   for (const [showTitle, eps] of byShow) {
     const seasons = new Set(eps.map((e) => e.season).filter((s) => s != null));
     const first = eps[0];
-    const tmdbId = eps.find((e) => e.tmdb_id)?.tmdb_id || undefined;
+    const withMeta = eps.find((e) => e.poster_path || e.tmdb_id) || first;
+    const tmdbId = withMeta.tmdb_id || undefined;
+    const art = artFromRow(withMeta);
     shows.push({
       id: newId('s'),
       type: 'show',
       title: showTitle,
       seasons: seasons.size || undefined,
       tmdbId,
+      poster: art.poster,
+      backdrop: art.backdrop,
+      blurb: withMeta.overview ? String(withMeta.overview).slice(0, 240) : undefined,
       omsLibraryId: libraryId,
       omsShowTitle: showTitle,
       omsItemId: first.id,

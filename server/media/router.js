@@ -76,16 +76,17 @@ export function createMediaRouter() {
   });
 
   router.post('/match', async (req, res) => {
-    const { tmdbKey, libraryId } = req.body || {};
+    const { tmdbKey, libraryId, force } = req.body || {};
     const key = resolveTmdbKey(tmdbKey);
     if (!key) {
       res.status(400).json({ error: 'TMDB is not configured on this Orbit server.' });
       return;
     }
     try {
+      const matchOpts = { force: !!force };
       const result = libraryId
-        ? await matchLibrary(libraryId, key)
-        : await matchAllLibraries(key);
+        ? await matchLibrary(libraryId, key, undefined, matchOpts)
+        : await matchAllLibraries(key, undefined, matchOpts);
       res.json({ ok: true, ...result });
     } catch (e) {
       res.status(400).json({ error: e.message || 'Match failed.' });

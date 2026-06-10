@@ -200,12 +200,27 @@ window.OrbitLib = (function () {
   }
 
   // resolve art — Plex poster first; TMDB only when needed and throttled
+  function artFromNode(node) {
+    if (!node?.poster && !node?.backdrop) return null;
+    return {
+      poster: node.poster || null,
+      backdrop: node.backdrop || node.poster || null,
+      tmdbId: node.tmdbId,
+    };
+  }
+
   async function resolve(node) {
     if (!node || node.type === 'collection') return null;
     const k = ck(node);
     if (cache[k]) {
       if (cache[k].plex) return cache[k];
       return cache[k].empty ? null : cache[k];
+    }
+    const fromNode = artFromNode(node);
+    if (fromNode?.poster || fromNode?.backdrop) {
+      cache[k] = fromNode;
+      saveCache();
+      return fromNode;
     }
     const plexPoster = plexPosterFor(node);
     if (plexPoster) {

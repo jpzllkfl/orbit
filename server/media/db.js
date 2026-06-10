@@ -49,6 +49,9 @@ CREATE TABLE IF NOT EXISTS media_items (
   width INTEGER,
   height INTEGER,
   tmdb_id INTEGER,
+  poster_path TEXT,
+  backdrop_path TEXT,
+  overview TEXT,
   scanned_at INTEGER NOT NULL,
   UNIQUE(library_id, file_path)
 );
@@ -115,7 +118,16 @@ export function getDb() {
   db.exec('PRAGMA foreign_keys = ON');
   db.exec(SCHEMA_V2);
   migrateFromV1(db);
+  migrateMediaMetadata(db);
   return db;
+}
+
+function migrateMediaMetadata(database) {
+  const cols = database.prepare('PRAGMA table_info(media_items)').all();
+  const names = new Set(cols.map((c) => c.name));
+  if (!names.has('poster_path')) database.exec('ALTER TABLE media_items ADD COLUMN poster_path TEXT');
+  if (!names.has('backdrop_path')) database.exec('ALTER TABLE media_items ADD COLUMN backdrop_path TEXT');
+  if (!names.has('overview')) database.exec('ALTER TABLE media_items ADD COLUMN overview TEXT');
 }
 
 export function resetDb() {

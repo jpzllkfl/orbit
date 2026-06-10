@@ -121,13 +121,15 @@ async function main() {
   const composeENV = detail.stack?.composeENV || '';
   let composeYAML = detail.stack?.composeYAML || fs.readFileSync(path.join(__dirname, '..', 'docker-compose.yml'), 'utf8');
 
-  const GIT_SHA = getArg('--sha', '8a4e612');
+  const GIT_SHA = getArg('--sha', 'main');
+  const GIT_REF = GIT_SHA === 'main' || GIT_SHA === 'master' ? 'main' : GIT_SHA;
+  const GIT_CONTEXT = `https://github.com/jpzllkfl/orbit.git#${GIT_REF}`;
   // Build from GitHub + unique image tag so compose rebuilds (up -d skips build when :latest exists).
   composeYAML = composeYAML
-    .replace(/^\s*build:\s*\.\s*$/m, '    build:\n      context: https://github.com/jpzllkfl/orbit.git#main')
+    .replace(/^\s*build:\s*\.\s*$/m, `    build:\n      context: ${GIT_CONTEXT}`)
     .replace(
       /context:\s*https:\/\/github\.com\/jpzllkfl\/orbit\.git[^\n]*/g,
-      'context: https://github.com/jpzllkfl/orbit.git#main',
+      `context: ${GIT_CONTEXT}`,
     )
     .replace(/^\s*image:\s*orbit[^\n]*$/m, `    image: orbit:${GIT_SHA}`);
 

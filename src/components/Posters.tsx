@@ -187,7 +187,13 @@ function plexThumbArt(node: OrbitNode, card = false) {
   return poster ? { poster, backdrop: backdrop || poster } : null;
 }
 
+function serverArtForNode(node: OrbitNode) {
+  return plexArtFromNode(node);
+}
+
 function gridArtForNode(node: OrbitNode) {
+  const server = serverArtForNode(node);
+  if (server) return server;
   const plex = plexThumbArt(node, true);
   if (plex) return plex;
   return Lib.getCached(node);
@@ -195,7 +201,7 @@ function gridArtForNode(node: OrbitNode) {
 
 function artForNode(node: OrbitNode, cardPoster = false) {
   if (cardPoster) return gridArtForNode(node);
-  return plexArtFromNode(node) || plexThumbArt(node) || Lib.getCached(node);
+  return serverArtForNode(node) || plexThumbArt(node) || Lib.getCached(node);
 }
 
 export function useArt(node: OrbitNode, overrideId?: string, enabled = true, cardPoster = false) {
@@ -207,7 +213,12 @@ export function useArt(node: OrbitNode, overrideId?: string, enabled = true, car
       return;
     }
     let alive = true;
-    const plex = cardPoster ? plexThumbArt(node, true) : plexArtFromNode(node) || plexThumbArt(node, false);
+    const server = serverArtForNode(node);
+    if (server) {
+      setArt(server);
+      return;
+    }
+    const plex = cardPoster ? plexThumbArt(node, true) : plexThumbArt(node, false);
     if (plex) {
       setArt(plex);
       return;

@@ -25,6 +25,44 @@ function cleanReleaseTitle(s) {
     .trim();
 }
 
+/** True when a parsed title is too weak for TMDB search (numeric dumps, hashes, etc.). */
+export function isWeakTitle(title) {
+  const t = (title || '').trim();
+  if (!t || t.length < 2) return true;
+  if (/^\d+$/.test(t)) return true;
+  if (/^[0-9a-f]{8,}$/i.test(t.replace(/\s/g, ''))) return true;
+  if (/^(disc|cd|disk|pt|part|reel|tape)\s*\d+$/i.test(t)) return true;
+  if (t.length <= 5 && /^\d/.test(t) && !/[a-z]{3,}/i.test(t)) return true;
+  return false;
+}
+
+export function titleFromFolderName(folderName) {
+  let n = (folderName || '').replace(/[._]/g, ' ').trim();
+  const m = n.match(/^(.+?)\s*[\[(](\d{4})[\])]\s*$/);
+  if (m) return { title: cleanReleaseTitle(m[1]), year: Number(m[2]) };
+  const m2 = n.match(/^(.+?)\s+(19\d{2}|20\d{2})$/);
+  if (m2) return { title: cleanReleaseTitle(m2[1]), year: Number(m2[2]) };
+  return { title: cleanReleaseTitle(n), year: null };
+}
+
+function pathRelative(filePath, root) {
+  const norm = (p) => p.replace(/\\/g, '/');
+  const f = norm(filePath);
+  if (!root) return f;
+  const r = norm(root).replace(/\/$/, '');
+  if (f.startsWith(r + '/')) return f.slice(r.length + 1);
+  return f;
+}
+
+/** Folder names along a file path (nearest parent first). */
+export function folderNamesFromPath(filePath, libraryRoot) {
+  const rel = pathRelative(filePath, libraryRoot);
+  const parts = rel.split(/[/\\]/).filter(Boolean);
+  if (!parts.length) return [];
+  parts.pop();
+  return parts.reverse();
+}
+
 export function parseMovie(fileName) {
   const raw = baseName(fileName);
   const m = raw.match(/^(.+?)\s*[\[(](\d{4})[\])]\s*/);
@@ -32,6 +70,21 @@ export function parseMovie(fileName) {
   const m2 = raw.match(/^(.+?)\s+(19\d{2}|20\d{2})(?:\s|$)/);
   if (m2) return { title: cleanReleaseTitle(m2[1]), year: Number(m2[2]) };
   return { title: cleanReleaseTitle(raw), year: null };
+}
+
+/** Use parent/grandparent folder when the filename alone is not searchable. */
+export function movieTitleFromPath(filePath, libraryRoot, fileName) {
+  const parsed = parseMovie(fileName);
+  if (!isWeakTitle(parsed.title)) return parsed;
+
+  for (const folder of folderNamesFromPath(filePath, libraryRoot)) {
+    if (/^season\s*\d/i.test(folder) || /^s\d{1,2}$/i.test(folder)) continue;
+    const fromFolder = titleFromFolderName(folder);
+    if (!isWeakTitle(fromFolder.title)) {
+      return { title: fromFolder.title, year: fromFolder.year || parsed.year };
+    }
+  }
+  return parsed;
 }
 
 export function parseEpisode(fileName) {
@@ -54,26 +107,55 @@ export function parseEpisode(fileName) {
   return null;
 }
 
-/** Guess show title from parent folder (e.g. /TV/Breaking Bad/S01E01.mkv). */
+/** Guess show title from parent folders (e.g. /TV/Breaking Bad/Season 01/file.mkv). */
 export function showFromPath(filePath, libraryRoot) {
-  const rel = pathRelative(filePath, libraryRoot);
-  const parts = rel.split(/[/\\]/).filter(Boolean);
-  if (parts.length >= 2) {
-    const folder = parts[parts.length - 2];
-    if (!/season\s*\d/i.test(folder) && !/^s\d/i.test(folder)) {
-      return folder.replace(/[._]/g, ' ').trim();
-    }
-    if (parts.length >= 3) {
-      return parts[parts.length - 3].replace(/[._]/g, ' ').trim();
-    }
+  for (const folder of folderNamesFromPath(filePath, libraryRoot)) {
+    if (/^season\s*\d/i.test(folder) || /^s\d{1,2}$/i.test(folder)) continue;
+    const fromFolder = titleFromFolderName(folder);
+    if (!isWeakTitle(fromFolder.title)) return fromFolder.title;
   }
   return null;
 }
 
-function pathRelative(filePath, root) {
-  const norm = (p) => p.replace(/\\/g, '/');
-  const f = norm(filePath);
-  const r = norm(root).replace(/\/$/, '');
-  if (f.startsWith(r + '/')) return f.slice(r.length + 1);
-  return f;
+/** Build ordered TMDB search queries for a movie row. */
+export function movieSearchQueries(row, libraryRoot) {
+  const queries = [];
+  const seen = new Set();
+  const add = (t) => {
+    const q = (t || '').trim();
+    if (!q || seen.has(q.toLowerCase())) return;
+    seen.add(q.toLowerCase());
+    queries.push(q);
+  };
+
+  add(row.title);
+  if (row.file_path && row.file_name) {
+    const fromPath = movieTitleFromPath(row.file_path, libraryRoot, row.file_name);
+    add(fromPath.title);
+    for (const folder of folderNamesFromPath(row.file_path, libraryRoot)) {
+      add(titleFromFolderName(folder).title);
+    }
+  }
+  return queries;
+}
+
+/** Build ordered TMDB search queries for a TV show. */
+export function showSearchQueries(showTitle, sampleRow, libraryRoot) {
+  const queries = [];
+  const seen = new Set();
+  const add = (t) => {
+    const q = (t || '').trim();
+    if (!q || seen.has(q.toLowerCase())) return;
+    seen.add(q.toLowerCase());
+    queries.push(q);
+  };
+
+  add(showTitle);
+  if (sampleRow?.file_path) {
+    for (const folder of folderNamesFromPath(sampleRow.file_path, libraryRoot)) {
+      if (/^season\s*\d/i.test(folder) || /^s\d{1,2}$/i.test(folder)) continue;
+      add(titleFromFolderName(folder).title);
+    }
+  }
+  return queries;
 }

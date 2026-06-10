@@ -3,7 +3,7 @@ import path from 'path';
 import { getDb } from './db.js';
 import { getLibrary, getLibraryFolders, updateLibraryScan } from './libraries.js';
 import { matchLibrary } from './matcher.js';
-import { isVideoFile, parseMovie, parseEpisode, showFromPath } from './naming.js';
+import { isVideoFile, movieTitleFromPath, parseEpisode, parseMovie, showFromPath } from './naming.js';
 import { getDefaultTmdbKey, isTmdbConfigured } from '../tmdb-config.js';
 
 function newItemId() {
@@ -60,7 +60,7 @@ function scanFiles(lib, rootPath, files, insert, now) {
     let showTitle = null;
 
     if (lib.type === 'movie') {
-      const parsed = parseMovie(fileName);
+      const parsed = movieTitleFromPath(filePath, rootPath, fileName);
       title = parsed.title;
       year = parsed.year;
       type = 'movie';
@@ -77,7 +77,7 @@ function scanFiles(lib, rootPath, files, insert, now) {
         title = ep.title;
         type = 'episode';
       } else {
-        title = parseMovie(fileName).title;
+        title = movieTitleFromPath(filePath, rootPath, fileName).title;
         type = 'episode';
       }
     }
@@ -160,18 +160,23 @@ export async function scanLibrary(libraryId, onProgress) {
   });
   onProgress?.({ phase: 'done', message: `Scan complete — ${totalCount} items.`, count: totalCount });
 
+  let matchResult = { matched: 0 };
   if (isTmdbConfigured() && totalCount > 0) {
     onProgress?.({ phase: 'match', message: 'Matching TMDB posters and titles…' });
     try {
-      await matchLibrary(libraryId, getDefaultTmdbKey(), (ev) =>
+      matchResult = await matchLibrary(libraryId, getDefaultTmdbKey(), (ev) =>
         onProgress?.({ phase: 'match', message: ev.message || 'Matching TMDB…' }),
       );
-    } catch {
-      /* TMDB offline — scan still succeeded */
+      onProgress?.({
+        phase: 'match',
+        message: `TMDB matched ${matchResult.matched} title${matchResult.matched === 1 ? '' : 's'}.`,
+      });
+    } catch (e) {
+      onProgress?.({ phase: 'match', message: 'TMDB match failed: ' + (e.message || 'unknown error') });
     }
   }
 
-  return { itemCount: totalCount, libraryId };
+  return { itemCount: totalCount, libraryId, matched: matchResult.matched || 0 };
 }
 
 export function listItems(libraryId, limit = 100) {

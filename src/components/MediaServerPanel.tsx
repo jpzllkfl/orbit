@@ -11,6 +11,7 @@ import {
 import { resetAppStateCache } from '../lib/appState';
 import { syncOmsAfterChange } from '../lib/omsSync';
 import { displayMediaPath } from '../lib/omsPaths';
+import { seedArtFromOms } from '../lib/importUtils';
 import { resetOrbitInstance } from '../lib/orbitReset';
 import { TreeStore } from '../lib/treeStore';
 import { OrbitMedia } from '../lib/orbitMedia';
@@ -291,6 +292,7 @@ export function MediaServerPanel({
     let merged: OrbitNode;
     if (result.tree) {
       merged = replaceOmsInTree(base, result.tree);
+      seedArtFromOms(merged);
     } else if (removedLibraryId || removedLibraryName) {
       merged = removeOmsLibraryFromTree(base, removedLibraryId, removedLibraryName);
     } else {
@@ -301,16 +303,16 @@ export function MediaServerPanel({
   }
 
   async function tmdbReady() {
-    if (Lib.connected) return true;
     try {
       await Lib.ensureTmdbReady?.();
       if (Lib.serverTmdb) return true;
       const res = await fetch(apiUrl('/api/tmdb/status'));
       const json = (await res.json()) as { available?: boolean; key?: string };
-      return !!json.available || json.key === 'set';
+      if (json.available || json.key === 'set') return true;
     } catch {
-      return false;
+      /* fall through */
     }
+    return Lib.connected;
   }
 
   async function matchAndSync(libraryId?: string) {
@@ -454,8 +456,12 @@ export function MediaServerPanel({
     setBusy(true);
     setImportMsg('Matching from TMDB…');
     try {
-      const result = await OrbitMedia.matchTmdb(Lib.key || undefined);
-      setImportMsg(`TMDB matched ${result.matched} titles — posters and details should fill in.`);
+      const result = await OrbitMedia.matchTmdb(Lib.key || undefined, undefined, true);
+      setImportMsg(
+        result.matched > 0
+          ? `TMDB matched ${result.matched} titles — posters and details should fill in.`
+          : 'TMDB match finished — no new titles matched. Try Scan to refresh filenames first.',
+      );
       await syncToSidebar();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'TMDB match failed');

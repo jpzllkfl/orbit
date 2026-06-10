@@ -1,6 +1,7 @@
 import type { MediaLibrary } from '../types/media';
 import type { OrbitNode } from '../types/orbit';
 import { fetchOmsTree, mergeOmsIntoTree } from './importLibraryFromOms';
+import { seedArtFromOms } from './importUtils';
 import { OrbitAccount } from './orbitAccount';
 import { OrbitMedia } from './orbitMedia';
 import { TreeStore } from './treeStore';
@@ -83,6 +84,7 @@ export async function maybeMergeOmsTree(tree: OrbitNode): Promise<OrbitNode | nu
     const result = await fetchOmsTree();
     if (!result.tree) return null;
     const merged = mergeOmsIntoTree(tree, result.tree);
+    seedArtFromOms(merged);
     TreeStore.save(merged);
     if (OrbitAccount.signedIn && OrbitAccount.syncReady) {
       await OrbitAccount.pushSync();
