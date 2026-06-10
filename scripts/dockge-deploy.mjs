@@ -21,15 +21,20 @@ const PASS = getArg('--pass', process.env.DOCKGE_PASS || '');
 const STACK_HINT = getArg('--stack', 'orbit');
 const BUILTIN_TMDB_KEY = 'b379792391747f1606e1d7a933dd2aea';
 
+function normalizeYaml(yaml) {
+  return String(yaml || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
 function injectEnv(yaml, key, value) {
+  let text = normalizeYaml(yaml);
   const line = `      ${key}: "${value}"`;
-  if (new RegExp(`^\\s*${key}:`, 'm').test(yaml)) {
-    return yaml.replace(new RegExp(`^\\s*${key}:.*$`, 'm'), line);
+  if (new RegExp(`^\\s*${key}:`, 'm').test(text)) {
+    return text.replace(new RegExp(`^\\s*${key}:.*$`, 'm'), line);
   }
-  if (/^\s+environment:\s*$/m.test(yaml)) {
-    return yaml.replace(/(\n\s+environment:\s*\n)/, `$1${line}\n`);
+  if (/^\s+environment:\s*$/m.test(text)) {
+    return text.replace(/(^\s+environment:\s*$)/m, `$1\n${line}`);
   }
-  return yaml.replace(/(services:\s*\n\s+orbit:\s*\n)/, `$1    environment:\n${line}\n`);
+  return text;
 }
 
 function agent(socket, action, ...rest) {
