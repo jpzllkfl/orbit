@@ -19,6 +19,18 @@ const HOST = getArg('--host', 'http://192.168.1.177:5001');
 const USER = getArg('--user', process.env.DOCKGE_USER || 'admin');
 const PASS = getArg('--pass', process.env.DOCKGE_PASS || '');
 const STACK_HINT = getArg('--stack', 'orbit');
+const BUILTIN_TMDB_KEY = 'b379792391747f1606e1d7a933dd2aea';
+
+function injectEnv(yaml, key, value) {
+  const line = `      ${key}: "${value}"`;
+  if (new RegExp(`^\\s*${key}:`, 'm').test(yaml)) {
+    return yaml.replace(new RegExp(`^\\s*${key}:.*$`, 'm'), line);
+  }
+  if (/^\s+environment:\s*$/m.test(yaml)) {
+    return yaml.replace(/(\n\s+environment:\s*\n)/, `$1${line}\n`);
+  }
+  return yaml.replace(/(services:\s*\n\s+orbit:\s*\n)/, `$1    environment:\n${line}\n`);
+}
 
 function agent(socket, action, ...rest) {
   return new Promise((resolve, reject) => {
@@ -133,6 +145,7 @@ async function main() {
       `context: ${GIT_CONTEXT}`,
     )
     .replace(/^\s*image:\s*orbit[^\n]*$/m, `    image: orbit:${IMAGE_TAG}`);
+  composeYAML = injectEnv(composeYAML, 'ORBIT_TMDB_API_KEY', BUILTIN_TMDB_KEY);
 
   console.log('Stopping stack...');
   const down = await agent(socket, 'downStack', stack.name);

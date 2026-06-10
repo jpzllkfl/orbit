@@ -15,7 +15,7 @@ services:
       ORBIT_OMS_AUTO_SEED: "0"
       ORBIT_MEDIA_ROOT: ${ORBIT_MEDIA_ROOT:-/mnt/broken_eye/media}
       ORBIT_MEDIA_BROWSE_ROOT: /media/share
-      ORBIT_TMDB_API_KEY: ${ORBIT_TMDB_API_KEY:-b379792391747f1606e1d7a933dd2aea}
+      ORBIT_TMDB_API_KEY: "b379792391747f1606e1d7a933dd2aea"
     user: "0:0"
     entrypoint:
       - /bin/sh

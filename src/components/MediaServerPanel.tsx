@@ -304,21 +304,24 @@ export function MediaServerPanel({
 
   async function tmdbReady() {
     try {
-      await Lib.ensureTmdbReady?.();
-      if (Lib.serverTmdb) return true;
       const res = await fetch(apiUrl('/api/tmdb/status'));
-      const json = (await res.json()) as { available?: boolean; key?: string };
-      if (json.available || json.key === 'set') return true;
+      const json = (await res.json()) as { available?: boolean };
+      if (json.available) return true;
     } catch {
-      /* fall through */
+      /* offline */
     }
-    return Lib.connected;
+    try {
+      await Lib.ensureTmdbReady?.();
+      return !!Lib.serverTmdb;
+    } catch {
+      return false;
+    }
   }
 
   async function matchAndSync(libraryId?: string) {
     if (!(await tmdbReady())) return 0;
     setImportMsg('Matching posters and titles from TMDB…');
-    const result = await OrbitMedia.matchTmdb(Lib.key || undefined, libraryId);
+    const result = await OrbitMedia.matchTmdb(undefined, libraryId);
     await syncToSidebar();
     return result.matched;
   }
@@ -456,7 +459,7 @@ export function MediaServerPanel({
     setBusy(true);
     setImportMsg('Matching from TMDB…');
     try {
-      const result = await OrbitMedia.matchTmdb(Lib.key || undefined, undefined, true);
+      const result = await OrbitMedia.matchTmdb(undefined, undefined, true);
       setImportMsg(
         result.matched > 0
           ? `TMDB matched ${result.matched} titles — posters and details should fill in.`

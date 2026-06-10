@@ -24,7 +24,7 @@ export function createTmdbRouter() {
       const override = req.headers['x-orbit-tmdb-key'];
       const apiKey = resolveTmdbKey(typeof override === 'string' ? override : '');
       if (!apiKey) {
-        res.status(503).json({ error: 'TMDB is not configured. Set ORBIT_TMDB_API_KEY on the Orbit server.' });
+        res.status(503).json({ error: 'TMDB is not available on this Orbit server.' });
         return;
       }
 

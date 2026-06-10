@@ -1,9 +1,11 @@
 import { createApp } from './createApp.js';
 import { ensureDockerDataDir } from './docker-data.js';
 import { maybeAutoSeedOnBoot } from './media/seed.js';
+import { ensureTmdbEnvAtBoot } from './tmdb-config.js';
 
 /** Start the Orbit Express app (used by CLI and Electron desktop). */
 export function startOrbitServer(port = 8090, host = '0.0.0.0') {
+  ensureTmdbEnvAtBoot();
   ensureDockerDataDir();
   const seeded = maybeAutoSeedOnBoot();
   if (seeded?.added?.length) {

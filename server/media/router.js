@@ -78,10 +78,6 @@ export function createMediaRouter() {
   router.post('/match', async (req, res) => {
     const { tmdbKey, libraryId, force } = req.body || {};
     const key = resolveTmdbKey(tmdbKey);
-    if (!key) {
-      res.status(400).json({ error: 'TMDB is not configured on this Orbit server.' });
-      return;
-    }
     try {
       const matchOpts = { force: !!force };
       const result = libraryId

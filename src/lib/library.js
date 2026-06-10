@@ -17,7 +17,8 @@ window.OrbitLib = (function () {
 
   function tmdbReady() {
     loadKey();
-    return serverTmdb || !!key;
+    // Orbit ships with a server TMDB key — treat server as ready once confirmed, or while checking.
+    return serverTmdb || !!key || serverTmdbPromise != null;
   }
 
   async function refreshServerTmdb() {
