@@ -161,6 +161,18 @@ export const OrbitAccount = {
     });
   },
 
+  /** Push immediately (e.g. after wipe) — bypasses pull cooldown. */
+  async pushSyncNow() {
+    if (!OrbitAccount.token) return null;
+    lastPullAt = 0;
+    syncHydrated = true;
+    const bundle = collectSyncBundle();
+    return api<SyncResponse>('/sync', {
+      method: 'PUT',
+      body: JSON.stringify({ bundle }),
+    });
+  },
+
   get syncReady() {
     return syncHydrated;
   },

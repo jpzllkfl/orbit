@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { DEFAULT_OMS_LIBRARIES } from './catalog.js';
 import { listLibraries } from './libraries.js';
 
 function dockerMode() {
@@ -79,8 +80,24 @@ function validatePath(targetPath) {
   throw new Error('That folder is outside locations Orbit can access.');
 }
 
+function browseLabel(rootPath) {
+  const def = DEFAULT_OMS_LIBRARIES.find((l) => l.mount === rootPath);
+  if (def) return `${def.name} — broken_eye/media/${def.hostDir}`;
+  if (rootPath === '/media') return 'All media folders';
+  if (rootPath.startsWith('/media/')) {
+    const leaf = path.basename(rootPath);
+    return `${leaf} — broken_eye/media/${leaf}`;
+  }
+  return rootPath;
+}
+
 export function browseRoots() {
-  return allowedRoots().map((rootPath) => {
+  let roots = allowedRoots();
+  const hasMediaChildren = roots.some((r) => r.startsWith('/media/') && r !== '/media');
+  if (hasMediaChildren) {
+    roots = roots.filter((r) => r !== '/media');
+  }
+  return roots.map((rootPath) => {
     let exists = false;
     let readable = false;
     try {
@@ -95,7 +112,8 @@ export function browseRoots() {
     return {
       path: rootPath,
       name: path.basename(rootPath.replace(/[/\\]+$/, '')) || rootPath,
-      label: rootPath,
+      label: browseLabel(rootPath),
+      hostHint: browseLabel(rootPath),
       exists,
       readable,
     };

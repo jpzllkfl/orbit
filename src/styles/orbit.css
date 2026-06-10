@@ -1354,8 +1354,13 @@ html.orbit-reduce-motion .coll-card { transition: none !important; transform: no
 .oms-toolbar .conns-btn svg { width: 16px; height: 16px; flex: none; }
 .oms-stats { margin: 0 0 12px; }
 .oms-msg { color: var(--cool); margin: 0 0 12px; }
-.oms-empty { text-align: center; padding: 28px 16px; border-radius: 12px; background: rgba(255,255,255,.02); border: 1px dashed var(--line); margin-bottom: 12px; }
-.oms-empty p { color: var(--muted); margin: 0 0 14px; font-size: 14px; }
+.oms-empty { text-align: center; padding: 20px 16px; border-radius: 12px; background: rgba(255,255,255,.02); border: 1px dashed var(--line); margin-bottom: 12px; }
+.oms-empty p { color: var(--muted); margin: 0 0 12px; font-size: 14px; }
+.oms-empty .conns-btn { width: auto; display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; margin: 0 auto; }
+.oms-empty .conns-btn svg { width: 16px; height: 16px; flex: none; }
+.oms-browse-hint { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin: 0 0 10px; }
+.oms-browse-hint code { font-size: 11.5px; }
+.oms-wizard-path-tech { font-size: 11px; color: var(--muted); opacity: .75; }
 .oms-lib-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .oms-lib-row {
   display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px;
@@ -1459,6 +1464,11 @@ html.orbit-reduce-motion .coll-card { transition: none !important; transform: no
 .oms-browse-row:disabled { opacity: .45; cursor: not-allowed; }
 .oms-browse-ic { display: grid; place-items: center; color: var(--cool); flex: none; }
 .oms-browse-ic svg { width: 18px; height: 18px; }
+.oms-browse-chev { display: grid; place-items: center; flex: none; color: var(--muted); opacity: .6; }
+.oms-browse-chev svg { width: 14px; height: 14px; }
+.oms-browse-bar-ic { display: inline-grid; place-items: center; }
+.oms-browse-bar-ic svg { width: 14px; height: 14px; }
+.oms-browse-row svg { width: 18px; height: 18px; flex: none; max-width: 18px; max-height: 18px; }
 .oms-browse-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .oms-browse-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
 .oms-browse-path { font-size: 11.5px; color: var(--muted); word-break: break-all; flex: 1; min-width: 120px; }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { displayMediaPath } from '../lib/omsPaths';
 import { OrbitMedia } from '../lib/orbitMedia';
 import type { BrowseEntry, BrowseRoot } from '../types/media';
 import { Icons } from './icons';
@@ -49,45 +50,53 @@ export function FolderBrowserModal({
     load(root.path);
   }
 
+  const pathLabel = path ? displayMediaPath(path) : '';
+
   const body = (
     <>
       {!embedded && <h3>Choose a folder</h3>}
-      {!embedded && (
-        <p className="sub">
-          Browse folders on the machine where Orbit is running. Mounted drives and <code>/media</code> paths appear
-          under start locations.
-        </p>
-      )}
+      <p className="oms-browse-hint">
+        Pick a folder on your TrueNAS share (<code>\\192.168.1.177\media</code>). Names below match{' '}
+        <code>broken_eye/media/…</code> on the server.
+      </p>
 
       {!path ? (
         <div className="oms-browse-roots">
-          <div className="oms-browse-label">Start locations</div>
-          {roots.map((r) => (
-            <button
-              key={r.path}
-              type="button"
-              className="oms-browse-row"
-              disabled={!r.exists || !r.readable}
-              onClick={() => openRoot(r)}
-            >
-              <span className="oms-browse-ic">{ic.folder({})}</span>
-              <span className="oms-browse-name">{r.label}</span>
-              {!r.exists && <span className="oms-warn">Not found</span>}
-            </button>
-          ))}
+          <div className="oms-browse-label">Your media folders</div>
+          {loading ? (
+            <p className="conns-sub">Loading folders…</p>
+          ) : roots.length ? (
+            roots.map((r) => (
+              <button
+                key={r.path}
+                type="button"
+                className="oms-browse-row"
+                disabled={!r.exists || !r.readable}
+                onClick={() => openRoot(r)}
+              >
+                <span className="oms-browse-ic">{ic.folder({})}</span>
+                <span className="oms-browse-name">{r.label}</span>
+                <span className="oms-browse-chev">{ic.chevR({})}</span>
+              </button>
+            ))
+          ) : (
+            <p className="conns-sub">No media folders found. Check Docker volume mounts in Dockge.</p>
+          )}
         </div>
       ) : (
         <>
           <div className="oms-browse-bar">
             {parent && (
               <button type="button" className="conns-btn sm" onClick={() => load(parent)}>
-                {ic.chevL({})} Up
+                <span className="oms-browse-bar-ic">{ic.chevL({})}</span> Up
               </button>
             )}
             <button type="button" className="conns-btn sm ghost" onClick={() => load(null)}>
-              All roots
+              All folders
             </button>
-            <code className="oms-browse-path">{path}</code>
+            <code className="oms-browse-path" title={path}>
+              {pathLabel}
+            </code>
           </div>
           <div className="oms-browse-list">
             {loading ? (
@@ -97,11 +106,11 @@ export function FolderBrowserModal({
                 <button key={e.path} type="button" className="oms-browse-row" onClick={() => openDir(e)}>
                   <span className="oms-browse-ic">{ic.folder({})}</span>
                   <span className="oms-browse-name">{e.name}</span>
-                  {ic.chevR({})}
+                  <span className="oms-browse-chev">{ic.chevR({})}</span>
                 </button>
               ))
             ) : (
-              <p className="conns-sub">No subfolders — you can still select this folder.</p>
+              <p className="conns-sub">No subfolders — select this folder if your files are here.</p>
             )}
           </div>
         </>

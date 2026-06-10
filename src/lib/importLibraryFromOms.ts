@@ -42,6 +42,20 @@ export function mergeOmsIntoTree(existing: OrbitNode, omsRoot: OrbitNode): Orbit
   };
 }
 
+/** Remove OMS-imported library branches from the curated Orbit tree. */
+export function stripOmsFromTree(existing: OrbitNode): OrbitNode {
+  return {
+    ...existing,
+    children: (existing.children || []).filter((c) => {
+      if (c.type !== 'library') return true;
+      if (c.omsLibraryId) return false;
+      if (c.title?.endsWith(' (OMS)')) return false;
+      if (String(c.blurb || '').includes('Orbit Media Server')) return false;
+      return true;
+    }),
+  };
+}
+
 export function omsStreamUrl(itemId: string): string {
   return apiUrl('/api/media/stream/' + encodeURIComponent(itemId));
 }
