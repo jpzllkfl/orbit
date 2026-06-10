@@ -19,8 +19,8 @@ export const DEFAULT_OMS_LIBRARIES = [
   { name: 'Remote L', type: 'movie', hostDir: 'remote_L', mount: '/media/remote-l' },
 ];
 
-/** Docker-compose volume lines for Dockge (host root = /mnt/tank/media by default). */
-export function composeVolumeLines(hostRoot = '/mnt/tank/media') {
+/** Docker-compose volume lines for Dockge (host root = /mnt/broken_eye/media on this NAS). */
+export function composeVolumeLines(hostRoot = '/mnt/broken_eye/media') {
   const root = hostRoot.replace(/\/+$/, '');
   return DEFAULT_OMS_LIBRARIES.map(
     (lib) => `- "${root}/${lib.hostDir}:${lib.mount}:ro"`,
