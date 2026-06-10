@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { DEFAULT_OMS_LIBRARIES } from './catalog.js';
-import { listLibraries } from './libraries.js';
+import { listAllFolderPaths, listLibraries } from './libraries.js';
 
 function dockerMode() {
   return process.env.ORBIT_DOCKER === '1';
@@ -41,7 +41,10 @@ export function allowedRoots() {
   };
 
   for (const r of envRoots()) add(r);
-  for (const lib of listLibraries()) add(lib.rootPath);
+  for (const p of listAllFolderPaths()) add(p);
+  for (const lib of listLibraries()) {
+    for (const f of lib.folders || []) add(f.path);
+  }
 
   if (fs.existsSync('/media')) {
     add('/media');

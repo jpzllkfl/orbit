@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { browseDir, browseRoots } from './browse.js';
 import { mediaStats } from './db.js';
-import { addLibrary, getLibrary, listLibraries, removeLibrary, updateLibrary, wipeAllLibraries } from './libraries.js';
+import { addLibrary, addLibraryFolder, getLibrary, listLibraries, removeLibrary, removeLibraryFolder, updateLibrary, wipeAllLibraries } from './libraries.js';
 import { listShowEpisodes, listShowSeasons } from './episodes.js';
 import { buildOrbitTreeFromOms } from './importTree.js';
 import { matchAllLibraries, matchLibrary } from './matcher.js';
@@ -186,11 +186,34 @@ export function createMediaRouter() {
 
   router.post('/libraries', (req, res) => {
     try {
-      const { name, type, rootPath } = req.body || {};
-      const lib = addLibrary({ name, type, rootPath });
-      res.status(201).json({ library: lib });
+      const { name, type, rootPath, folderPath } = req.body || {};
+      const pathArg = folderPath || rootPath;
+      const result = addLibrary({ name, type, folderPath: pathArg });
+      res.status(201).json(result);
     } catch (e) {
       res.status(400).json({ error: e.message || 'Could not add library.' });
+    }
+  });
+
+  router.post('/libraries/:id/folders', (req, res) => {
+    const lib = getLibrary(req.params.id);
+    if (!lib) return res.status(404).json({ error: 'Library not found.' });
+    try {
+      const { folderPath, rootPath } = req.body || {};
+      const result = addLibraryFolder(req.params.id, folderPath || rootPath);
+      res.status(201).json(result);
+    } catch (e) {
+      res.status(400).json({ error: e.message || 'Could not add folder.' });
+    }
+  });
+
+  router.delete('/libraries/:id/folders/:folderId', (req, res) => {
+    try {
+      const result = removeLibraryFolder(req.params.folderId);
+      if (!result) return res.status(404).json({ error: 'Folder not found.' });
+      res.json({ ok: true, ...result, libraries: listLibraries() });
+    } catch (e) {
+      res.status(400).json({ error: e.message || 'Could not remove folder.' });
     }
   });
 

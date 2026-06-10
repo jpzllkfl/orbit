@@ -1,4 +1,4 @@
-import type { BrowseResult, BrowseRoot, MediaItem, MediaLibrary, MediaServerStatus } from '../types/media';
+import type { BrowseResult, BrowseRoot, MediaItem, MediaLibrary, MediaLibraryFolder, MediaServerStatus } from '../types/media';
 import { orbitApiFetch } from './orbitApi';
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -21,12 +21,33 @@ export const OrbitMedia = {
     return libraries;
   },
 
-  async addLibrary(opts: { name: string; type: 'movie' | 'tv'; rootPath: string }): Promise<MediaLibrary> {
-    const { library } = await api<{ library: MediaLibrary }>('/libraries', {
+  async addLibrary(opts: {
+    name?: string;
+    type: 'movie' | 'tv';
+    rootPath?: string;
+    folderPath?: string;
+  }): Promise<{ library: MediaLibrary; folder: MediaLibraryFolder; created: boolean }> {
+    return api('/libraries', {
       method: 'POST',
-      body: JSON.stringify(opts),
+      body: JSON.stringify({
+        name: opts.name,
+        type: opts.type,
+        folderPath: opts.folderPath || opts.rootPath,
+      }),
     });
-    return library;
+  },
+
+  async addFolder(libraryId: string, folderPath: string): Promise<{ library: MediaLibrary; folder: MediaLibraryFolder }> {
+    return api('/libraries/' + encodeURIComponent(libraryId) + '/folders', {
+      method: 'POST',
+      body: JSON.stringify({ folderPath }),
+    });
+  },
+
+  async removeFolder(libraryId: string, folderId: string): Promise<{ ok: boolean; libraries: MediaLibrary[] }> {
+    return api('/libraries/' + encodeURIComponent(libraryId) + '/folders/' + encodeURIComponent(folderId), {
+      method: 'DELETE',
+    });
   },
 
   async removeLibrary(id: string): Promise<void> {

@@ -11,7 +11,7 @@ export type SyncedOmsLibrary = {
   id: string;
   name: string;
   type: 'movie' | 'tv';
-  rootPath: string;
+  folders: string[];
 };
 
 export function toSyncedLibraries(libs: MediaLibrary[]): SyncedOmsLibrary[] {
@@ -19,7 +19,7 @@ export function toSyncedLibraries(libs: MediaLibrary[]): SyncedOmsLibrary[] {
     id: l.id,
     name: l.name,
     type: l.type,
-    rootPath: l.rootPath,
+    folders: (l.folders || []).map((f) => f.path),
   }));
 }
 
@@ -50,31 +50,9 @@ export async function pullOmsLibrariesToSync(): Promise<SyncedOmsLibrary[]> {
   }
 }
 
-/** Apply synced library paths onto the home OMS server (add missing paths). */
+/** Apply synced library paths onto the home OMS server (add missing paths). Disabled — add folders manually in Connections. */
 export async function reconcileOmsLibrariesFromSync(): Promise<number> {
-  const desired = loadOmsLibrariesLocal();
-  if (!desired.length) return 0;
-  let added = 0;
-  try {
-    const current = await OrbitMedia.listLibraries();
-    const paths = new Set(current.map((l) => l.rootPath));
-    for (const lib of desired) {
-      if (paths.has(lib.rootPath)) continue;
-      try {
-        await OrbitMedia.addLibrary({
-          name: lib.name,
-          type: lib.type,
-          rootPath: lib.rootPath,
-        });
-        added++;
-      } catch {
-        /* path may not exist on this host */
-      }
-    }
-  } catch {
-    /* OMS offline */
-  }
-  return added;
+  return 0;
 }
 
 /** After any OMS change: refresh sync blob and push to account. */

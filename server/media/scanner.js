@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getDb } from './db.js';
-import { getLibrary, updateLibraryScan } from './libraries.js';
+import { getLibrary, getLibraryFolders, updateLibraryScan } from './libraries.js';
 import { isVideoFile, parseMovie, parseEpisode, showFromPath } from './naming.js';
 
 function newItemId() {
@@ -34,7 +34,6 @@ const insertStmt = () =>
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
 
-/** Movie-style release folder/file (year in name) — skip in TV libraries to avoid fake episode counts. */
 function looksLikeMovieRelease(filePath, fileName) {
   const parsed = parseMovie(fileName);
   if (parsed.year) return true;
@@ -43,15 +42,76 @@ function looksLikeMovieRelease(filePath, fileName) {
   return false;
 }
 
+function scanFiles(lib, rootPath, files, insert, now) {
+  let count = 0;
+  let skippedMovies = 0;
+
+  for (const filePath of files) {
+    const fileName = path.basename(filePath);
+    if (!isVideoFile(fileName)) continue;
+
+    let type = lib.type === 'tv' ? 'episode' : 'movie';
+    let title = fileName;
+    let year = null;
+    let season = null;
+    let episode = null;
+    let showTitle = null;
+
+    if (lib.type === 'movie') {
+      const parsed = parseMovie(fileName);
+      title = parsed.title;
+      year = parsed.year;
+      type = 'movie';
+    } else {
+      const ep = parseEpisode(fileName);
+      if (!ep && looksLikeMovieRelease(filePath, fileName)) {
+        skippedMovies++;
+        continue;
+      }
+      showTitle = showFromPath(filePath, rootPath);
+      if (ep) {
+        season = ep.season;
+        episode = ep.episode;
+        title = ep.title;
+        type = 'episode';
+      } else {
+        title = parseMovie(fileName).title;
+        type = 'episode';
+      }
+    }
+
+    let fileSize = null;
+    try {
+      fileSize = fs.statSync(filePath).size;
+    } catch {
+      /* ignore */
+    }
+
+    insert.run(
+      newItemId(),
+      lib.id,
+      type,
+      title,
+      year,
+      season,
+      episode,
+      showTitle,
+      filePath,
+      fileName,
+      fileSize,
+      now,
+    );
+    count++;
+  }
+
+  return { count, skippedMovies };
+}
+
 export function scanLibrary(libraryId, onProgress) {
   const lib = getLibrary(libraryId);
   if (!lib) throw new Error('Library not found.');
-  if (!fs.existsSync(lib.rootPath)) {
-    throw new Error(`Folder not found: ${lib.rootPath}`);
-  }
-  if (!fs.statSync(lib.rootPath).isDirectory()) {
-    throw new Error(`Path is not a folder: ${lib.rootPath}`);
-  }
+  const folders = getLibraryFolders(libraryId).filter((f) => f.pathExists && f.readable);
+  if (!folders.length) throw new Error('No valid folders on disk for this library.');
 
   const db = getDb();
   const clear = db.prepare('DELETE FROM media_items WHERE library_id = ?');
@@ -62,72 +122,18 @@ export function scanLibrary(libraryId, onProgress) {
 
   clear.run(libraryId);
 
-  let count = 0;
-  let skippedMovies = 0;
+  let totalCount = 0;
+  let totalSkipped = 0;
   const now = Date.now();
-  const files = [...walkDir(lib.rootPath)];
 
   db.exec('BEGIN IMMEDIATE');
   try {
-    for (const filePath of files) {
-      const fileName = path.basename(filePath);
-      if (!isVideoFile(fileName)) continue;
-
-      let type = lib.type === 'tv' ? 'episode' : 'movie';
-      let title = fileName;
-      let year = null;
-      let season = null;
-      let episode = null;
-      let showTitle = null;
-
-      if (lib.type === 'movie') {
-        const parsed = parseMovie(fileName);
-        title = parsed.title;
-        year = parsed.year;
-        type = 'movie';
-      } else {
-        const ep = parseEpisode(fileName);
-        if (!ep && looksLikeMovieRelease(filePath, fileName)) {
-          skippedMovies++;
-          continue;
-        }
-        showTitle = showFromPath(filePath, lib.rootPath);
-        if (ep) {
-          season = ep.season;
-          episode = ep.episode;
-          title = ep.title;
-          type = 'episode';
-        } else {
-          title = parseMovie(fileName).title;
-          type = 'episode';
-        }
-      }
-
-      let fileSize = null;
-      try {
-        fileSize = fs.statSync(filePath).size;
-      } catch {
-        /* ignore */
-      }
-
-      insert.run(
-        newItemId(),
-        libraryId,
-        type,
-        title,
-        year,
-        season,
-        episode,
-        showTitle,
-        filePath,
-        fileName,
-        fileSize,
-        now,
-      );
-      count++;
-      if (count % 50 === 0) {
-        onProgress?.({ phase: 'progress', message: `Found ${count} files…`, count });
-      }
+    for (const folder of folders) {
+      onProgress?.({ phase: 'progress', message: `Scanning ${folder.path}…` });
+      const files = [...walkDir(folder.path)];
+      const { count, skippedMovies } = scanFiles(lib, folder.path, files, insert, now);
+      totalCount += count;
+      totalSkipped += skippedMovies;
     }
     db.exec('COMMIT');
   } catch (e) {
@@ -139,18 +145,20 @@ export function scanLibrary(libraryId, onProgress) {
     throw e;
   }
 
+  const folderNote =
+    folders.length > 1 ? ` across ${folders.length} folders` : '';
   const skipNote =
-    skippedMovies > 0
-      ? ` Skipped ${skippedMovies} movie-like file${skippedMovies === 1 ? '' : 's'} (use a Movies library for those).`
+    totalSkipped > 0
+      ? ` Skipped ${totalSkipped} movie-like file${totalSkipped === 1 ? '' : 's'}.`
       : '';
   updateLibraryScan(libraryId, {
     status: 'done',
-    message: `Found ${count} video file${count === 1 ? '' : 's'}.${skipNote}`,
-    itemCount: count,
+    message: `Found ${totalCount} video file${totalCount === 1 ? '' : 's'}${folderNote}.${skipNote}`,
+    itemCount: totalCount,
   });
-  onProgress?.({ phase: 'done', message: `Scan complete — ${count} items.`, count });
+  onProgress?.({ phase: 'done', message: `Scan complete — ${totalCount} items.`, count: totalCount });
 
-  return { itemCount: count, libraryId };
+  return { itemCount: totalCount, libraryId };
 }
 
 export function listItems(libraryId, limit = 100) {

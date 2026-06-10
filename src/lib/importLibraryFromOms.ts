@@ -42,18 +42,21 @@ export function mergeOmsIntoTree(existing: OrbitNode, omsRoot: OrbitNode): Orbit
   };
 }
 
-/** Remove OMS-imported library branches from the curated Orbit tree. */
+/** Replace OMS library nodes in tree (keeps Plex / manual libs). */
+export function replaceOmsInTree(existing: OrbitNode, omsRoot: OrbitNode): OrbitNode {
+  const keep = (existing.children || []).filter((c) => {
+    if (c.type !== 'library') return true;
+    if (c.omsLibraryId) return false;
+    if (c.title?.endsWith(' (OMS)')) return false;
+    if (String(c.blurb || '').includes('Orbit Media Server')) return false;
+    return true;
+  });
+  const omsLibs = (omsRoot.children || []).filter((c) => c.type === 'library');
+  return { ...existing, children: [...keep, ...omsLibs] };
+}
+
 export function stripOmsFromTree(existing: OrbitNode): OrbitNode {
-  return {
-    ...existing,
-    children: (existing.children || []).filter((c) => {
-      if (c.type !== 'library') return true;
-      if (c.omsLibraryId) return false;
-      if (c.title?.endsWith(' (OMS)')) return false;
-      if (String(c.blurb || '').includes('Orbit Media Server')) return false;
-      return true;
-    }),
-  };
+  return replaceOmsInTree(existing, { id: 'oms-empty', type: 'collection', title: '', children: [] });
 }
 
 export function omsStreamUrl(itemId: string): string {
