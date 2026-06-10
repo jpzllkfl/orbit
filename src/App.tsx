@@ -232,19 +232,8 @@ export default function App() {
 
   useEffect(() => {
     if (!authReady || plexBootSyncing) return;
-    if (showWizard) return;
-    if (!orbitUser && !guestMode) {
-      setShowWizard(false);
-      return;
-    }
-    if (OrbitAccount.signedIn) {
-      if (bootError) return;
-      setShowWizard(!plexIsConfigured(Conn.load()));
-      return;
-    }
-    if (!guestMode) return;
-    if (!Conn.connected) setShowWizard(true);
-  }, [authReady, guestMode, orbitUser, connVer, libraryReady, showWizard, plexBootSyncing, bootError]);
+    // Plex setup is optional — open it from Connections only when you want it.
+  }, [authReady, plexBootSyncing]);
 
   function persistTree(t: OrbitNode) {
     if (Conn.live && liveTreeRef.current && treeHasContent(t)) TreeStore.save(t);
@@ -372,7 +361,7 @@ export default function App() {
     setLibraryReady(treeHasContent(merged));
     invalidateTitleIndex();
     resetAppStateCache(false);
-    if (OrbitAccount.signedIn) OrbitAccount.pushSync().catch(() => {});
+    setConnVer((v) => v + 1);
     setVer((v) => v + 1);
   }
 
@@ -770,7 +759,7 @@ export default function App() {
     );
   }
 
-  if (needsPlexImport(tree) && !plexBootSyncing && !bootError && orbitUser) {
+  if (needsPlexImport(tree) && !plexBootSyncing && !bootError && orbitUser && Conn.connected) {
     return (
       <div className="login-gate">
         <div className="login-gate-orb" />
@@ -784,6 +773,18 @@ export default function App() {
           onClick={() => setBootAttempt((n) => n + 1)}
         >
           Import from Plex
+        </button>
+        <button
+          type="button"
+          className="cw-ghost"
+          style={{ marginTop: 12 }}
+          onClick={() => {
+            Conn.clear();
+            Plex.disconnect();
+            setBootAttempt((n) => n + 1);
+          }}
+        >
+          Continue without Plex
         </button>
       </div>
     );

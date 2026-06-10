@@ -161,7 +161,7 @@ export const OrbitAccount = {
     });
   },
 
-  /** Push immediately (e.g. after wipe) — bypasses pull cooldown. */
+  /** Push immediately — bypasses pull cooldown. */
   async pushSyncNow() {
     if (!OrbitAccount.token) return null;
     lastPullAt = 0;
@@ -171,6 +171,25 @@ export const OrbitAccount = {
       method: 'PUT',
       body: JSON.stringify({ bundle }),
     });
+  },
+
+  /** Replace cloud sync entirely (start fresh). */
+  async pushSyncReplace(bundle: Record<string, string> = {}) {
+    if (!OrbitAccount.token) return null;
+    lastPullAt = 0;
+    syncHydrated = true;
+    return api<SyncResponse>('/sync', {
+      method: 'PUT',
+      body: JSON.stringify({ bundle, replace: true }),
+    });
+  },
+
+  /** Wipe all cloud-synced data for this account. */
+  async clearCloudSync() {
+    if (!OrbitAccount.token) return null;
+    lastPullAt = 0;
+    syncHydrated = true;
+    return api<SyncResponse>('/sync', { method: 'DELETE' });
   },
 
   get syncReady() {

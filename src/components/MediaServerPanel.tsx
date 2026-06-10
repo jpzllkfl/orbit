@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Lib } from '../lib';
-import { fetchOmsTree, mergeOmsIntoTree, stripOmsFromTree } from '../lib/importLibraryFromOms';
-import { saveOmsLibrariesLocal, syncOmsAfterChange } from '../lib/omsSync';
+import { fetchOmsTree, mergeOmsIntoTree } from '../lib/importLibraryFromOms';
+import { syncOmsAfterChange } from '../lib/omsSync';
 import { displayMediaPath } from '../lib/omsPaths';
+import { resetOrbitInstance } from '../lib/orbitReset';
 import { isUsingRemoteHome } from '../lib/orbitServer';
-import { OrbitAccount } from '../lib/orbitAccount';
 import { OrbitMedia } from '../lib/orbitMedia';
-import { TreeStore } from '../lib/treeStore';
 import type { MediaLibrary, MediaServerStatus } from '../types/media';
 import type { OrbitNode } from '../types/orbit';
 import { FolderBrowserModal } from './FolderBrowserModal';
@@ -280,30 +279,23 @@ export function MediaServerPanel({
   async function wipeAllLibraries() {
     if (
       !confirm(
-        'Delete ALL Orbit Media Server libraries and indexed files? This also removes OMS-imported titles from your Orbit library (Plex libraries stay). Your video files on disk are not deleted.',
+        'Reset Orbit completely? This clears your media libraries, indexed files, imported titles, Plex connection settings, and cloud sync. Your video files on disk are not deleted.',
       )
     ) {
       return;
     }
-    if (!confirm('Really wipe everything and start fresh?')) return;
+    if (!confirm('Last chance — start completely fresh?')) return;
     setBusy(true);
     setError('');
-    setImportMsg('');
+    setImportMsg('Resetting…');
     try {
-      await OrbitMedia.wipeLibraries();
-      saveOmsLibrariesLocal([]);
-      const stripped = stripOmsFromTree(tree);
-      TreeStore.save(stripped);
-      onImported?.(stripped);
+      const freshTree = await resetOrbitInstance();
+      onImported?.(freshTree);
       await reload();
-      if (OrbitAccount.signedIn) {
-        await OrbitAccount.pushSyncNow();
-      }
-      setImportMsg(
-        'Cleared media index and removed OMS imports. Use Add Library to point at broken_eye/media folders (movies, tv, remote_L, etc.).',
-      );
+      setImportMsg('Orbit reset. Add libraries with the button above — Plex is optional.');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Wipe failed');
+      setError(e instanceof Error ? e.message : 'Reset failed');
+      setImportMsg('');
     } finally {
       setBusy(false);
     }
@@ -490,7 +482,7 @@ export function MediaServerPanel({
               Sync TrueNAS library paths
             </button>
             <button type="button" className="conns-btn danger sm" disabled={busy} onClick={wipeAllLibraries}>
-              Wipe all media data
+              Reset everything (start fresh)
             </button>
           </div>
         </details>

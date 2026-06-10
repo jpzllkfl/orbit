@@ -13,6 +13,7 @@ import {
   resetAppStateCache,
   treeHasContent,
   treeHasLibraries,
+  plexIsConfigured,
 } from '../lib';
 import { maybeMergeOmsTree } from '../lib/omsSync';
 import { invalidateTitleIndex } from '../lib/treeIndex';
@@ -95,9 +96,10 @@ export function useOrbitBoot(opts: {
         let state = await loadAppStateAsync();
         if (!alive) return;
 
-        const repairLibraries = await needsLibraryRepair(state.tree);
+        const repairLibraries = plexIsConfigured(Conn.load()) && (await needsLibraryRepair(state.tree));
+        const shouldPlexImport = (needsPlexImport(state.tree) || repairLibraries) && plexIsConfigured(Conn.load());
 
-        if (needsPlexImport(state.tree) || repairLibraries) {
+        if (shouldPlexImport) {
           if (!treeHasContent(state.tree)) {
             TreeStore.clear();
             resetAppStateCache(false);

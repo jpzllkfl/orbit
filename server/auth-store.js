@@ -139,6 +139,13 @@ export function setUserState(userId, bundle) {
   return state;
 }
 
+/** Replace entire sync blob (used for "start fresh" — merge would keep old keys). */
+export function replaceUserState(userId, bundle) {
+  const state = { bundle: bundle && typeof bundle === 'object' ? bundle : {}, updatedAt: Date.now() };
+  writeJson(statePath(userId), state);
+  return state;
+}
+
 function sanitizeUser(user) {
   return { id: user.id, email: user.email, displayName: user.displayName, createdAt: user.createdAt };
 }

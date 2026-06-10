@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Conn, Lib, OT, OrbitAccount, Plex, TreeStore } from '../lib';
+import { Conn, Lib, OT, OrbitAccount, Plex } from '../lib';
 import { isDesktopApp } from '../lib/isDesktop';
 import { getHomeServer, isUsingRemoteHome, setHomeServer } from '../lib/orbitServer';
 import type { OrbitNode } from '../types/orbit';
@@ -49,10 +49,17 @@ export function ConnectionsView({
 
   function signOut() {
     Conn.clear();
-    TreeStore.clear();
     Plex.disconnect();
+    if (OrbitAccount.signedIn) {
+      const bundle: Record<string, string> = {};
+      try {
+        bundle['orbit.conn.v1'] = JSON.stringify({ connected: false });
+      } catch {
+        /* ignore */
+      }
+      OrbitAccount.pushSyncReplace(bundle).catch(() => {});
+    }
     onDisconnect?.();
-    onOpenWizard();
   }
 
   useEffect(() => {
@@ -212,9 +219,9 @@ export function ConnectionsView({
               Sign out &amp; reconnect
             </button>
           ) : (
-            <button className="conns-btn primary" onClick={onOpenWizard}>
-              Sign in with Plex
-            </button>
+            <p className="conns-sub" style={{ marginTop: 10 }}>
+              Plex is optional. Use Orbit Media Server above for direct TrueNAS playback.
+            </p>
           )}
         </div>
 
@@ -255,7 +262,7 @@ export function ConnectionsView({
               )}
             </>
           ) : (
-            <div className="conns-empty">No server connected. Sign in with Plex to import your library.</div>
+            <div className="conns-empty">No Plex server linked. Orbit Media Server works without Plex.</div>
           )}
         </div>
 

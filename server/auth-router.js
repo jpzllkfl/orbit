@@ -7,6 +7,7 @@ import {
   resolveSession,
   revokeSession,
   setUserState,
+  replaceUserState,
 } from './auth-store.js';
 
 function bearerToken(req) {
@@ -62,11 +63,16 @@ export function createAuthRouter() {
   });
 
   router.put('/sync', requireAuth, (req, res) => {
-    const { bundle } = req.body || {};
+    const { bundle, replace } = req.body || {};
     if (!bundle || typeof bundle !== 'object') {
       return res.status(400).json({ error: 'Invalid sync bundle' });
     }
-    const state = setUserState(req.orbitUser.id, bundle);
+    const state = replace ? replaceUserState(req.orbitUser.id, bundle) : setUserState(req.orbitUser.id, bundle);
+    res.json(state);
+  });
+
+  router.delete('/sync', requireAuth, (req, res) => {
+    const state = replaceUserState(req.orbitUser.id, {});
     res.json(state);
   });
 
