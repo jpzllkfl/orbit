@@ -122,8 +122,9 @@ async function main() {
   let composeYAML = detail.stack?.composeYAML || fs.readFileSync(path.join(__dirname, '..', 'docker-compose.yml'), 'utf8');
 
   const GIT_SHA = getArg('--sha', 'main');
-  const GIT_REF = GIT_SHA === 'main' || GIT_SHA === 'master' ? 'main' : GIT_SHA;
-  const GIT_CONTEXT = `https://github.com/jpzllkfl/orbit.git#${GIT_REF}`;
+  // Docker git context only accepts branch/tag names reliably — always build from main.
+  const GIT_CONTEXT = 'https://github.com/jpzllkfl/orbit.git#main';
+  const IMAGE_TAG = GIT_SHA === 'main' || GIT_SHA === 'master' ? 'latest' : String(GIT_SHA).slice(0, 12);
   // Build from GitHub + unique image tag so compose rebuilds (up -d skips build when :latest exists).
   composeYAML = composeYAML
     .replace(/^\s*build:\s*\.\s*$/m, `    build:\n      context: ${GIT_CONTEXT}`)
@@ -131,7 +132,7 @@ async function main() {
       /context:\s*https:\/\/github\.com\/jpzllkfl\/orbit\.git[^\n]*/g,
       `context: ${GIT_CONTEXT}`,
     )
-    .replace(/^\s*image:\s*orbit[^\n]*$/m, `    image: orbit:${GIT_SHA}`);
+    .replace(/^\s*image:\s*orbit[^\n]*$/m, `    image: orbit:${IMAGE_TAG}`);
 
   console.log('Stopping stack...');
   const down = await agent(socket, 'downStack', stack.name);
