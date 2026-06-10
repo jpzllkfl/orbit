@@ -1,4 +1,4 @@
-import { authApiUrl, mediaApiUrl, getOmsManagementServer } from './orbitServer';
+import { authApiUrl, getOmsManagementServer } from './orbitServer';
 
 function authToken(): string | null {
   try {
