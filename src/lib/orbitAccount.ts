@@ -4,7 +4,6 @@ import { isDesktopApp } from './isDesktop';
 import { applySyncBundle, collectSyncBundle } from './syncBundle';
 import { reconcileOmsLibrariesFromSync } from './omsSync';
 import { TreeStore } from './treeStore.ts';
-import { isDesktopApp } from './isDesktop';
 
 const SESSION_LS = 'orbit.session.v1';
 const USER_LS = 'orbit.user.v1';
