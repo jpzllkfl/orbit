@@ -353,8 +353,8 @@ export default function App() {
   const activeLibId = path.length >= 2 && !query.trim() ? path[1] : null;
   const connected = Conn.connected || Lib.connected || Plex.connected;
 
-  function onOmsImport(merged: OrbitNode) {
-    TreeStore.save(merged);
+  async function onOmsImport(merged: OrbitNode) {
+    await TreeStore.saveImmediate(merged);
     setTree(merged);
     setPath([merged.id]);
     const hasContent = (merged.children || []).some((c) => c.type === 'library');

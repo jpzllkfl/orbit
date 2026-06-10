@@ -135,9 +135,7 @@ export const OrbitAccount = {
   async pullSync() {
     const state = await api<SyncResponse>('/sync');
     const keyCount = state.bundle ? Object.keys(state.bundle).length : 0;
-    if (keyCount) {
-      applySyncBundle(state.bundle);
-    }
+    applySyncBundle(state.bundle || {});
     await reconcileOmsLibrariesFromSync();
     syncHydrated = true;
     lastPullAt = Date.now();

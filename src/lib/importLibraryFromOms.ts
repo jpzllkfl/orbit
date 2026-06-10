@@ -59,6 +59,14 @@ export function stripOmsFromTree(existing: OrbitNode): OrbitNode {
   return replaceOmsInTree(existing, { id: 'oms-empty', type: 'collection', title: '', children: [] });
 }
 
+/** Drop one OMS library from the sidebar when import-tree is unavailable. */
+export function removeOmsLibraryFromTree(existing: OrbitNode, libraryId: string): OrbitNode {
+  const children = (existing.children || []).filter(
+    (c) => c.type !== 'library' || c.omsLibraryId !== libraryId,
+  );
+  return { ...existing, children };
+}
+
 export function omsStreamUrl(itemId: string): string {
   return apiUrl('/api/media/stream/' + encodeURIComponent(itemId));
 }

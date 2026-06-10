@@ -185,7 +185,20 @@ export const TreeStore = {
   ingestSyncRaw(raw: string): boolean {
     try {
       const tree = parseAndCache(raw, { stripArt: useIdb(), slim: useIdb() });
-      if (!tree || !treeHasContent(tree)) return false;
+      if (!tree) return false;
+      if (!treeHasContent(tree)) {
+        parsedCache = tree;
+        idbHasTree = false;
+        try {
+          localStorage.removeItem(LS);
+        } catch {
+          /* ignore */
+        }
+        if (useIdb()) {
+          void ensureIdbReady().then(() => idbDel(LS));
+        }
+        return true;
+      }
       if (useIdb()) {
         idbHasTree = true;
         void ensureIdbReady().then(() => idbSet(LS, JSON.stringify(tree)));

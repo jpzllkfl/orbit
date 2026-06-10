@@ -218,9 +218,13 @@ export function createMediaRouter() {
   });
 
   router.delete('/libraries/:id', (req, res) => {
-    const ok = removeLibrary(req.params.id);
-    if (!ok) return res.status(404).json({ error: 'Library not found.' });
-    res.json({ ok: true });
+    try {
+      const ok = removeLibrary(req.params.id);
+      if (!ok) return res.status(404).json({ error: 'Library not found.' });
+      res.json({ ok: true, libraries: listLibraries() });
+    } catch (e) {
+      res.status(400).json({ error: e.message || 'Could not remove library.' });
+    }
   });
 
   router.patch('/libraries/:id', (req, res) => {

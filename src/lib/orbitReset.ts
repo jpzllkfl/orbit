@@ -68,6 +68,7 @@ export async function resetOrbitInstance(): Promise<OrbitNode> {
     try {
       await OrbitAccount.pushSyncReplace({
         'orbit.tree.v1': JSON.stringify(slimTreeForMemory(shell.tree)),
+        [OMS_LIBS_KEY]: '[]',
       });
     } catch {
       /* offline */

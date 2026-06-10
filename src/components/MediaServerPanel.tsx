@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Lib } from '../lib';
-import { fetchOmsTree, replaceOmsInTree } from '../lib/importLibraryFromOms';
+import {
+  fetchOmsTree,
+  removeOmsLibraryFromTree,
+  replaceOmsInTree,
+  stripOmsFromTree,
+} from '../lib/importLibraryFromOms';
 import { resetAppStateCache } from '../lib/appState';
 import { syncOmsAfterChange } from '../lib/omsSync';
 import { displayMediaPath } from '../lib/omsPaths';
@@ -233,7 +238,7 @@ export function MediaServerPanel({
   onImported,
 }: {
   tree: OrbitNode;
-  onImported?: (merged: OrbitNode) => void;
+  onImported?: (merged: OrbitNode) => void | Promise<void>;
 }) {
   const [status, setStatus] = useState<import('../types/media').MediaServerStatus | null>(null);
   const [libraries, setLibraries] = useState<MediaLibrary[]>([]);
@@ -260,11 +265,17 @@ export function MediaServerPanel({
     reload();
   }, [reload]);
 
-  async function syncToSidebar() {
+  async function syncToSidebar(removedLibraryId?: string) {
     const result = await fetchOmsTree();
-    if (!result.tree) return;
-    const merged = replaceOmsInTree(tree, result.tree);
-    onImported?.(merged);
+    let merged: OrbitNode;
+    if (result.tree) {
+      merged = replaceOmsInTree(tree, result.tree);
+    } else if (removedLibraryId) {
+      merged = removeOmsLibraryFromTree(tree, removedLibraryId);
+    } else {
+      merged = stripOmsFromTree(tree);
+    }
+    await onImported?.(merged);
   }
 
   async function afterAddLibrary(libraryId: string) {
@@ -340,7 +351,7 @@ export function MediaServerPanel({
       await OrbitMedia.removeLibrary(id);
       await reload();
       await syncOmsAfterChange();
-      await syncToSidebar();
+      await syncToSidebar(id);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not remove library');
     } finally {
@@ -363,7 +374,7 @@ export function MediaServerPanel({
     try {
       const freshTree = await resetOrbitInstance();
       resetAppStateCache(false);
-      onImported?.(freshTree);
+      await onImported?.(freshTree);
       await reload();
       setImportMsg('Everything cleared. Reloading…');
       window.setTimeout(() => window.location.reload(), 400);

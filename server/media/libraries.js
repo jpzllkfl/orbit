@@ -142,7 +142,10 @@ export function removeLibraryFolder(folderId) {
 export function removeLibrary(id) {
   const lib = getLibrary(id);
   if (!lib) return false;
-  getDb().prepare('DELETE FROM libraries WHERE id = ?').run(id);
+  const db = getDb();
+  db.prepare('DELETE FROM media_items WHERE library_id = ?').run(id);
+  db.prepare('DELETE FROM library_folders WHERE library_id = ?').run(id);
+  db.prepare('DELETE FROM libraries WHERE id = ?').run(id);
   return true;
 }
 

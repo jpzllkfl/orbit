@@ -30,7 +30,7 @@ export function ConnectionsView({
   onDisconnect?: () => void;
   onBump?: () => void;
   onAccountChange?: () => void;
-  onOmsImport?: (merged: OrbitNode) => void;
+  onOmsImport?: (merged: OrbitNode) => void | Promise<void>;
 }) {
   const conn = Conn.load();
   const libs = (tree.children || []).filter((n) => n.type === 'library');
