@@ -1423,7 +1423,12 @@ html.orbit-reduce-motion .coll-card { transition: none !important; transform: no
 .oms-wizard-name-field input:focus { border-color: color-mix(in oklch, var(--cool), transparent 40%); }
 .oms-wizard-path { margin: 0 0 16px; word-break: break-all; }
 .oms-wizard-path code { font-size: 12px; }
-.oms-native-pick { margin-bottom: 10px; width: auto; display: inline-flex; align-items: center; gap: 8px; }
+.oms-native-pick-block { margin-bottom: 14px; }
+.oms-native-pick { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px; }
+.oms-native-pick svg { width: 18px; height: 18px; flex: none; }
+.oms-wizard-or { margin: 0 0 12px; font-size: 12px; font-weight: 600; color: var(--muted); text-align: center; text-transform: uppercase; letter-spacing: .04em; }
+.oms-web-limit { margin: 0 0 14px; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,.03); border: 1px solid var(--line); line-height: 1.5; }
+.oms-lib-row-actions .conns-btn.danger svg { width: 16px; height: 16px; }
 .oms-browse-embedded { margin-top: 4px; }
 .oms-browse-embedded .oms-browse-roots, .oms-browse-embedded .oms-browse-list { max-height: 240px; }
 .oms-browse-actions.embedded { display: flex; justify-content: flex-end; margin-top: 12px; }

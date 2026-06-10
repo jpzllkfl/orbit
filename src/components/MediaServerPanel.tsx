@@ -11,7 +11,6 @@ import { syncOmsAfterChange } from '../lib/omsSync';
 import { displayMediaPath } from '../lib/omsPaths';
 import { resetOrbitInstance } from '../lib/orbitReset';
 import { TreeStore } from '../lib/treeStore';
-import { isUsingRemoteHome } from '../lib/orbitServer';
 import { OrbitMedia } from '../lib/orbitMedia';
 import type { MediaLibrary } from '../types/media';
 import type { OrbitNode } from '../types/orbit';
@@ -162,12 +161,28 @@ function AddLibraryWizard({
         {step === 'folder' && (
           <div className="oms-wizard-step">
             <p className="oms-wizard-lead">
-              Browse to a folder ({typeLabel} scan). You can add more folders to the same library later.
+              Choose a folder for {typeLabel} scanning. You can add more folders to the same library later.
             </p>
-            {!isUsingRemoteHome() && canNativeFolderPick() && (
-              <button type="button" className="conns-btn sm oms-native-pick" disabled={busy} onClick={pickNativeFolder}>
-                {ic.folder({})} Pick folder (e.g. T: drive)
-              </button>
+            {canNativeFolderPick() ? (
+              <div className="oms-native-pick-block">
+                <button
+                  type="button"
+                  className="conns-btn primary oms-native-pick"
+                  disabled={busy}
+                  onClick={pickNativeFolder}
+                >
+                  {ic.folder({})} Pick folder on this PC
+                </button>
+                <p className="conns-sub oms-hint">
+                  Opens File Explorer — choose a drive or folder (e.g. C:\Movies, T:\TV).
+                </p>
+                <p className="oms-wizard-or">or browse server folders below</p>
+              </div>
+            ) : (
+              <p className="conns-sub oms-hint oms-web-limit">
+                Import from this PC (C:\, T:\, etc.) requires{' '}
+                <strong>Orbit Desktop</strong>. In the browser you can only browse folders on the Orbit server.
+              </p>
             )}
             <FolderBrowserModal
               embedded
@@ -479,8 +494,9 @@ export function MediaServerPanel({
                     disabled={busy}
                     onClick={() => removeLibrary(lib.id)}
                     aria-label={`Delete ${lib.name}`}
+                    title="Delete library"
                   >
-                    {ic.x({})}
+                    {ic.trash({})}
                   </button>
                 </div>
               </div>
