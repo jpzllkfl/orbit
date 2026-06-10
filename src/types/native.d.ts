@@ -5,6 +5,14 @@ export type VideoBounds = {
   height: number;
 };
 
+export type UpdateStatus = {
+  state: 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error' | 'dev';
+  message?: string;
+  version?: string;
+  nextVersion?: string | null;
+  percent?: number;
+};
+
 export type OrbitNativeAPI = {
   available: boolean;
   getInfo(): Promise<{
@@ -13,6 +21,7 @@ export type OrbitNativeAPI = {
     platform?: string;
     localPort?: number;
     mediaOrigin?: string;
+    appVersion?: string;
   }>;
   play(opts: { url: string; startSec?: number; bounds?: VideoBounds }): Promise<void>;
   pause(paused: boolean): Promise<void>;
@@ -24,6 +33,10 @@ export type OrbitNativeAPI = {
   onResyncBounds?(cb: () => void): void;
   openExternal(url: string): Promise<void>;
   pickFolder?(): Promise<string | null>;
+  checkForUpdates?(): Promise<UpdateStatus>;
+  installUpdate?(): Promise<boolean>;
+  getUpdateStatus?(): Promise<UpdateStatus>;
+  onUpdateStatus?(cb: (status: UpdateStatus) => void): () => void;
 };
 
 declare global {

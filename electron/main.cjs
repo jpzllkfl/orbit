@@ -4,6 +4,7 @@ const path = require('path');
 const http = require('http');
 const { pathToFileURL } = require('url');
 const { MpvController, hwndFromBuffer, findMpv } = require('./mpv.cjs');
+const { initAutoUpdater, checkForUpdates, installUpdate, scheduleStartupCheck, getUpdateStatus } = require('./updater.cjs');
 
 const ROOT = path.join(__dirname, '..');
 const DEBUG = process.env.ORBIT_ELECTRON_DEBUG === '1';
@@ -179,6 +180,8 @@ function createMainWindow(port) {
 
   mainWindow.once('ready-to-show', () => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
+    initAutoUpdater(() => mainWindow);
+    scheduleStartupCheck(12000);
   });
 
   if (DEBUG) mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -223,6 +226,10 @@ app.on('window-all-closed', () => {
   app.quit();
 });
 
+ipcMain.handle('orbit-update:check', async () => checkForUpdates());
+ipcMain.handle('orbit-update:install', async () => installUpdate());
+ipcMain.handle('orbit-update:status', async () => getUpdateStatus());
+
 ipcMain.handle('orbit-shell:open-external', async (_evt, url) => {
   if (url) await shell.openExternal(String(url));
 });
@@ -257,6 +264,7 @@ ipcMain.handle('orbit-native:info', async () => {
     platform: process.platform,
     localPort: activePort,
     mediaOrigin,
+    appVersion: app.getVersion(),
   };
 });
 

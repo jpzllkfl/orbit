@@ -1,0 +1,50 @@
+name: Desktop release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'server/**'
+      - 'electron/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.js'
+      - 'tsconfig*.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set release version
+        run: node scripts/bump-desktop-version.mjs
+        env:
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+
+      - name: Build frontend
+        run: npm run build
+        env:
+          VITE_PLEX_PROXY: '1'
+
+      - name: Build and publish Windows installer
+        run: npx electron-builder --win nsis --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release summary
+        run: node -e "console.log('Published', require('./package.json').version)"

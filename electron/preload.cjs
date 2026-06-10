@@ -35,4 +35,18 @@ contextBridge.exposeInMainWorld('orbitNative', {
   pickFolder() {
     return ipcRenderer.invoke('orbit-shell:pick-folder');
   },
+  checkForUpdates() {
+    return ipcRenderer.invoke('orbit-update:check');
+  },
+  installUpdate() {
+    return ipcRenderer.invoke('orbit-update:install');
+  },
+  getUpdateStatus() {
+    return ipcRenderer.invoke('orbit-update:status');
+  },
+  onUpdateStatus(cb) {
+    const handler = (_evt, status) => cb(status);
+    ipcRenderer.on('orbit-update:status', handler);
+    return () => ipcRenderer.removeListener('orbit-update:status', handler);
+  },
 });

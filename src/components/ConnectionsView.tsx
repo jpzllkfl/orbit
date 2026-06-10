@@ -3,6 +3,7 @@ import { Conn, Lib, OT, OrbitAccount, Plex } from '../lib';
 import { isDesktopApp } from '../lib/isDesktop';
 import { getHomeServer, isUsingRemoteHome, setHomeServer } from '../lib/orbitServer';
 import type { OrbitNode } from '../types/orbit';
+import type { UpdateStatus } from '../types/native';
 import { OrbitAccountModal } from './OrbitAccountModal';
 import { MediaServerPanel } from './MediaServerPanel';
 import { Icons, LIB_ICON } from './icons';
@@ -41,6 +42,9 @@ export function ConnectionsView({
   const [syncBusy, setSyncBusy] = useState(false);
   const [lastCloudSync, setLastCloudSync] = useState<number | null>(null);
   const [homeUrl, setHomeUrl] = useState(() => getHomeServer());
+  const [appVersion, setAppVersion] = useState('');
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+  const [updateBusy, setUpdateBusy] = useState(false);
   const syncedLabel = conn?.syncedAt
     ? new Date(conn.syncedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
     : 'not yet';
@@ -67,6 +71,30 @@ export function ConnectionsView({
   }, []);
 
   useEffect(() => OrbitAccount.onChange(() => setOrbitUser(OrbitAccount.user)), []);
+
+  useEffect(() => {
+    if (!isDesktopApp() || !window.orbitNative?.getInfo) return;
+    window.orbitNative.getInfo().then((info) => {
+      if (info.appVersion) setAppVersion(info.appVersion);
+    });
+    window.orbitNative.getUpdateStatus?.().then((s) => setUpdateStatus(s));
+    return window.orbitNative.onUpdateStatus?.((s) => setUpdateStatus(s));
+  }, []);
+
+  async function checkDesktopUpdate() {
+    if (!window.orbitNative?.checkForUpdates) return;
+    setUpdateBusy(true);
+    try {
+      const s = await window.orbitNative.checkForUpdates();
+      setUpdateStatus(s);
+    } finally {
+      setUpdateBusy(false);
+    }
+  }
+
+  function installDesktopUpdate() {
+    window.orbitNative?.installUpdate?.();
+  }
 
   async function signOutOrbit() {
     await OrbitAccount.logout();
@@ -126,6 +154,36 @@ export function ConnectionsView({
 
       <div className="conns-grid">
         <MediaServerPanel tree={tree} onImported={onOmsImport} />
+
+        {isDesktopApp() && (
+          <div className="conns-card wide">
+            <div className="conns-card-h">
+              <span className="conns-pill">{ic.refresh({})}Desktop updates</span>
+              <span className={'conns-state' + (updateStatus?.state === 'ready' ? ' on' : '')}>
+                {appVersion ? `v${appVersion}` : 'Desktop'}
+              </span>
+            </div>
+            <p className="conns-sub">
+              Orbit checks GitHub for new desktop builds automatically. After this one-time install, updates download
+              in the background — restart when prompted.
+            </p>
+            {updateStatus?.message && (
+              <p className="conns-sub oms-msg" style={{ marginTop: 8 }}>
+                {updateStatus.message}
+              </p>
+            )}
+            <div className="conns-actions" style={{ marginTop: 10 }}>
+              <button className="conns-btn sm" disabled={updateBusy} onClick={checkDesktopUpdate}>
+                {updateBusy ? 'Checking…' : 'Check for updates'}
+              </button>
+              {updateStatus?.state === 'ready' && (
+                <button className="conns-btn primary sm" onClick={installDesktopUpdate}>
+                  Restart &amp; install update
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="conns-card wide orbit-acct-card">
           <div className="conns-card-h">
