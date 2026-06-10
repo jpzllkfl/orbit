@@ -98,23 +98,29 @@ export async function maybeMergeOmsTree(tree: OrbitNode): Promise<OrbitNode | nu
 /** Refresh OMS library nodes from the media server (posters, titles, new libs). */
 export async function syncOmsTreeFromHome(
   tree: OrbitNode,
-  opts: { mergeOnly?: boolean } = {},
+  opts: { mergeOnly?: boolean; force?: boolean } = {},
 ): Promise<OrbitNode | null> {
-  if (isDesktopApp()) return null;
-  if (opts.mergeOnly && treeHasOmsContent(tree)) return null;
   try {
     const st = await OrbitMedia.status();
     if (!st.items || st.items < 1) return null;
     const result = await fetchOmsTree();
     if (!result.tree) return null;
-    const merged = opts.mergeOnly ? mergeOmsIntoTree(tree, result.tree) : replaceOmsInTree(tree, result.tree);
+    const refresh =
+      opts.force || isDesktopApp() || !treeHasOmsContent(tree) || (st.libraries || 0) > countOmsLibraries(tree);
+    const merged = refresh || !opts.mergeOnly
+      ? replaceOmsInTree(tree, result.tree)
+      : mergeOmsIntoTree(tree, result.tree);
     seedArtFromOms(merged);
     TreeStore.save(merged);
-    if (OrbitAccount.signedIn && OrbitAccount.syncReady) {
+    if (OrbitAccount.signedIn) {
       await OrbitAccount.pushSyncNow();
     }
     return merged;
   } catch {
     return null;
   }
+}
+
+function countOmsLibraries(tree: OrbitNode): number {
+  return (tree.children || []).filter((c) => c.type === 'library' && (c.omsLibraryId || String(c.blurb || '').includes('Orbit Media Server'))).length;
 }

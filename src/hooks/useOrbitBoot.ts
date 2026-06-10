@@ -17,7 +17,7 @@ import {
   plexIsConfigured,
 } from '../lib';
 import { FRESH_RESET_KEY } from '../lib/orbitReset';
-import { publishDesktopMediaOrigin, syncOmsTreeFromHome, treeHasOmsContent } from '../lib/omsSync';
+import { publishDesktopMediaOrigin, syncOmsTreeFromHome } from '../lib/omsSync';
 import { isDesktopApp } from '../lib/isDesktop';
 import { invalidateTitleIndex } from '../lib/treeIndex';
 import type { OrbitUser } from '../lib/orbitAccount';
@@ -177,8 +177,8 @@ export function useOrbitBoot(opts: {
         }
 
         if (!alive) return;
-        if (user && !freshReset && !treeHasOmsContent(state.tree)) {
-          const omsMerged = await syncOmsTreeFromHome(state.tree);
+        if (user && !freshReset) {
+          const omsMerged = await syncOmsTreeFromHome(state.tree, { force: isDesktopApp() });
           if (omsMerged) {
             state = { tree: omsMerged, path: [omsMerged.id] };
             resetAppStateCache(false);

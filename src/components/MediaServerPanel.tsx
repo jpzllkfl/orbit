@@ -318,11 +318,11 @@ export function MediaServerPanel({
     }
   }
 
-  async function matchAndSync(libraryId?: string) {
+  async function matchAndSync(libraryId?: string, resyncSidebar = true) {
     if (!(await tmdbReady())) return 0;
-    setImportMsg('Matching posters and titles from TMDB…');
+    setImportMsg('Matching posters and titles from TMDB (runs in background for large libraries)…');
     const result = await OrbitMedia.matchTmdb(undefined, libraryId);
-    await syncToSidebar();
+    if (resyncSidebar) await syncToSidebar();
     return result.matched;
   }
 
@@ -334,17 +334,18 @@ export function MediaServerPanel({
       const libs = await OrbitMedia.listLibraries();
       setLibraries(libs);
       const lib = libs.find((l) => l.id === libraryId);
-      let matched = 0;
+      setImportMsg(`"${lib?.name || 'Library'}" scanned — updating sidebar…`);
+      await syncToSidebar();
+      setImportMsg(`"${lib?.name || 'Library'}" in sidebar — matching posters from TMDB in the background…`);
       if (await tmdbReady()) {
-        matched = await matchAndSync(libraryId);
-      } else {
-        await syncToSidebar();
+        void matchAndSync(libraryId).then((matched) => {
+          setImportMsg(
+            matched > 0
+              ? `"${lib?.name || 'Library'}" ready — ${matched} titles matched with posters.`
+              : `"${lib?.name || 'Library'}" ready — TMDB matching still running or few titles matched by filename.`,
+          );
+        });
       }
-      setImportMsg(
-        matched > 0
-          ? `"${lib?.name || 'Library'}" ready — ${matched} titles matched with posters.`
-          : `"${lib?.name || 'Library'}" scanned — matching metadata…`,
-      );
       const st = await OrbitMedia.status();
       setStatus(st);
     } catch (e) {
@@ -360,11 +361,16 @@ export function MediaServerPanel({
     try {
       await OrbitMedia.scanLibrary(id);
       await reload();
+      await syncToSidebar();
+      setImportMsg('Sidebar updated — matching TMDB in the background…');
       if (await tmdbReady()) {
-        const matched = await matchAndSync(id);
-        setImportMsg(matched > 0 ? `Matched ${matched} titles from TMDB.` : 'Scan done. Few titles matched — check filenames or TMDB key.');
-      } else {
-        await syncToSidebar();
+        void matchAndSync(id).then((matched) => {
+          setImportMsg(
+            matched > 0
+              ? `Matched ${matched} titles from TMDB.`
+              : 'Scan done — TMDB matching may still be running for large libraries.',
+          );
+        });
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Scan failed');
@@ -457,18 +463,20 @@ export function MediaServerPanel({
       return;
     }
     setBusy(true);
-    setImportMsg('Matching from TMDB…');
+    setImportMsg('Refreshing sidebar, then matching TMDB in the background…');
     try {
-      const result = await OrbitMedia.matchTmdb(undefined, undefined, true);
-      setImportMsg(
-        result.matched > 0
-          ? `TMDB matched ${result.matched} titles — posters and details should fill in.`
-          : 'TMDB match finished — no new titles matched. Try Scan to refresh filenames first.',
-      );
       await syncToSidebar();
+      void OrbitMedia.matchTmdb(undefined, undefined, true).then(async (result) => {
+        await syncToSidebar();
+        setImportMsg(
+          result.matched > 0
+            ? `TMDB matched ${result.matched} titles — posters and details should fill in.`
+            : 'TMDB match finished — no new titles matched. Try Scan to refresh filenames first.',
+        );
+        setBusy(false);
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'TMDB match failed');
-    } finally {
       setBusy(false);
     }
   }

@@ -42,14 +42,16 @@ export function mergeOmsIntoTree(existing: OrbitNode, omsRoot: OrbitNode): Orbit
   };
 }
 
-/** Replace OMS library nodes in tree (keeps Plex / manual libs). */
+/** Replace OMS library nodes in tree (keeps Plex / manual libs). Drops stale orphan libraries. */
 export function replaceOmsInTree(existing: OrbitNode, omsRoot: OrbitNode): OrbitNode {
   const keep = (existing.children || []).filter((c) => {
     if (c.type !== 'library') return true;
+    if (c.plexKey) return true;
     if (c.omsLibraryId) return false;
     if (c.title?.endsWith(' (OMS)')) return false;
     if (String(c.blurb || '').includes('Orbit Media Server')) return false;
-    return true;
+    // Stale sidebar entry from old cloud sync — remove when refreshing from OMS.
+    return false;
   });
   const omsLibs = (omsRoot.children || []).filter((c) => c.type === 'library');
   return { ...existing, children: [...keep, ...omsLibs] };

@@ -40,7 +40,7 @@ export function slimTreeForMemory(root: OrbitNode, keepArtDepth = 1): OrbitNode 
       const v = n[k as keyof OrbitNode];
       if (v !== undefined && v !== null && v !== '') (out as unknown as Record<string, unknown>)[k] = v;
     }
-    if (depth <= keepArtDepth) {
+    if (depth <= keepArtDepth || n.type === 'movie' || n.type === 'show' || n.omsItemId || n.tmdbId) {
       if (n.poster) out.poster = n.poster;
       if (n.backdrop) out.backdrop = n.backdrop;
       if (n.blurb) out.blurb = n.blurb;
