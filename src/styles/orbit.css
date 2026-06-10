@@ -179,6 +179,19 @@ html.orbit-desktop .h-row {
 .nav-edit-btn:hover { color: var(--text); background: rgba(255,255,255,.05); }
 .nav-edit-btn.on { color: var(--warm); border-color: color-mix(in oklch, var(--warm), transparent 70%); background: color-mix(in oklch, var(--warm), transparent 90%); }
 .nav-edit-hint { font-size: 11px; color: var(--muted); padding: 0 10px 6px; }
+.nav-item-row { display: flex; align-items: center; gap: 4px; }
+.nav-item-row .nav-item { flex: 1; min-width: 0; }
+.nav-item-row.drop-target .nav-item { background: color-mix(in oklch, var(--cool), transparent 88%); outline: 1px dashed color-mix(in oklch, var(--cool), transparent 40%); }
+.nav-item-row.dragging { opacity: .45; }
+.nav-lib-title { flex: 1; min-width: 0; text-align: left; }
+.nav-lib-del {
+  flex: none; padding: 8px; border: none; border-radius: 8px;
+  background: transparent; color: rgb(249, 119, 112); cursor: pointer; display: inline-flex;
+}
+.nav-lib-del:hover { background: rgba(172, 48, 49, 0.18); }
+.nav-lib-del svg { width: 16px; height: 16px; }
+.confirm-dialog { max-width: 420px; }
+.confirm-dialog-msg { color: var(--text-2); font-size: 14px; line-height: 1.5; margin: 0 0 16px; }
 .lib-nav-edit .nav-item { cursor: grab; }
 .lib-nav-edit .nav-item.dragging { opacity: .45; }
 .lib-nav-edit .nav-item.drop-target { background: color-mix(in oklch, var(--cool), transparent 88%); outline: 1px dashed color-mix(in oklch, var(--cool), transparent 40%); }

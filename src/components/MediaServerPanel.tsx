@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Lib } from '../lib';
+import { deleteOrbitLibrary } from '../lib/deleteOrbitLibrary';
 import {
   fetchOmsTree,
   removeOmsLibraryFromTree,
@@ -14,6 +15,7 @@ import { TreeStore } from '../lib/treeStore';
 import { OrbitMedia } from '../lib/orbitMedia';
 import type { MediaLibrary } from '../types/media';
 import type { OrbitNode } from '../types/orbit';
+import { ConfirmDialog } from './ConfirmDialog';
 import { FolderBrowserModal } from './FolderBrowserModal';
 import { Icons } from './icons';
 
@@ -265,6 +267,7 @@ export function MediaServerPanel({
   const [wizardOpen, setWizardOpen] = useState(false);
   const [addFolderTo, setAddFolderTo] = useState<MediaLibrary | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [confirmDeleteLib, setConfirmDeleteLib] = useState<MediaLibrary | null>(null);
 
   const reload = useCallback(async () => {
     try {
@@ -358,20 +361,23 @@ export function MediaServerPanel({
     }
   }
 
-  async function removeLibrary(id: string) {
-    const lib = libraries.find((l) => l.id === id);
-    if (!confirm(`Delete "${lib?.name || 'this library'}" from Orbit Media Server? Sidebar updates after; Plex libraries stay unless you remove those separately.`)) {
-      return;
-    }
+  async function executeDeleteLibrary() {
+    const lib = confirmDeleteLib;
+    if (!lib) return;
     setBusy(true);
     setError('');
     try {
-      await OrbitMedia.removeLibrary(id);
+      const merged = await deleteOrbitLibrary({
+        tree: TreeStore.load() ?? tree,
+        omsLibraryId: lib.id,
+        libraryName: lib.name,
+      });
+      await onImported?.(merged);
       await reload();
-      await syncToSidebar(id, lib?.name);
-      setImportMsg(`Removed "${lib?.name || 'library'}" — check the sidebar.`);
+      setImportMsg(`"${lib.name}" removed from the sidebar.`);
+      setConfirmDeleteLib(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not remove library');
+      setError(e instanceof Error ? e.message : 'Could not delete library');
     } finally {
       setBusy(false);
     }
@@ -492,7 +498,7 @@ export function MediaServerPanel({
                     type="button"
                     className="conns-btn danger sm"
                     disabled={busy}
-                    onClick={() => removeLibrary(lib.id)}
+                    onClick={() => setConfirmDeleteLib(lib)}
                     aria-label={`Delete ${lib.name}`}
                     title="Delete library"
                   >
@@ -566,6 +572,16 @@ export function MediaServerPanel({
           onDone={afterAddLibrary}
         />
       )}
+
+      <ConfirmDialog
+        open={!!confirmDeleteLib}
+        title={`Delete "${confirmDeleteLib?.name || 'library'}"?`}
+        message="Removes this library from Orbit Media Server and the sidebar. Your video files on disk are not deleted."
+        confirmLabel="Delete library"
+        busy={busy}
+        onCancel={() => !busy && setConfirmDeleteLib(null)}
+        onConfirm={() => void executeDeleteLibrary()}
+      />
     </div>
   );
 }

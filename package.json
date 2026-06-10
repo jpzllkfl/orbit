@@ -14,6 +14,8 @@
     "start": "node server/index.js",
     "desktop": "npm run build && electron .",
     "desktop:dev": "npm run build && cross-env ORBIT_ELECTRON_DEBUG=1 DEBUG_PLEX=1 electron .",
+    "dist:win": "npm run build && electron-builder --win nsis",
+    "dist:win:portable": "npm run build && electron-builder --win portable",
     "lint": "eslint .",
     "preview": "vite preview",
     "docker:up": "docker compose up --build",
@@ -25,6 +27,27 @@
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },
+  "build": {
+    "appId": "com.broken-eye.orbit",
+    "productName": "Orbit",
+    "directories": { "output": "release" },
+    "files": [
+      "dist/**/*",
+      "server/**/*",
+      "electron/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": ["nsis"],
+      "artifactName": "Orbit-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Orbit"
+    }
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.12.3",
@@ -34,6 +57,7 @@
     "concurrently": "^9.2.0",
     "cross-env": "^7.0.3",
     "electron": "^35.1.5",
+    "electron-builder": "^25.1.8",
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",

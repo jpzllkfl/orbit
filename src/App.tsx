@@ -26,6 +26,8 @@ import { loadSettings } from './lib/settings';
 import { syncWatchStateFromPlex } from './lib/plexWatchSync';
 import { newId, resultToNode } from './lib/nodeFactory';
 import { ContextMenu, type ContextMenuItem } from './components/ContextMenu';
+import { ConfirmDialog } from './components/ConfirmDialog';
+import { deleteOrbitLibrary } from './lib/deleteOrbitLibrary';
 import { mergeCollectionsInTree, moveNodeInTree, removeNodeFromTree } from './lib/treeMutations';
 import { idPath, isColl, nodeByPath, sortByTitle } from './lib/treeUtils';
 import type { OrbitUser } from './lib/orbitAccount';
@@ -79,6 +81,8 @@ export default function App() {
   const [libNavEdit, setLibNavEdit] = useState(false);
   const [libDragId, setLibDragId] = useState<string | null>(null);
   const [libDropId, setLibDropId] = useState<string | null>(null);
+  const [libDeleteTarget, setLibDeleteTarget] = useState<OrbitNode | null>(null);
+  const [libDeleteBusy, setLibDeleteBusy] = useState(false);
   const [collVisible, setCollVisible] = useState(24);
   const libMoreRef = useRef<HTMLDivElement>(null);
   const collMoreRef = useRef<HTMLDivElement>(null);
@@ -497,6 +501,35 @@ export default function App() {
     mutate((t) => removeNodeFromTree(t, id));
   }
 
+  async function confirmDeleteSidebarLibrary() {
+    const lb = libDeleteTarget;
+    if (!lb) return;
+    setLibDeleteBusy(true);
+    try {
+      const merged = await deleteOrbitLibrary({
+        tree,
+        sidebarNodeId: lb.id,
+        omsLibraryId: lb.omsLibraryId,
+        libraryName: lb.title,
+      });
+      await TreeStore.saveImmediate(merged);
+      setTree(merged);
+      resetAppStateCache(false);
+      invalidateTitleIndex();
+      setVer((v) => v + 1);
+      setConnVer((v) => v + 1);
+      if (path.includes(lb.id)) {
+        setPath([merged.id]);
+      }
+      setLibDeleteTarget(null);
+      setLibNavEdit(false);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Could not delete library');
+    } finally {
+      setLibDeleteBusy(false);
+    }
+  }
+
   function addToCurrent(node: OrbitNode) {
     mutate((t) => {
       const c = nodeByPath(t, path);
@@ -911,7 +944,7 @@ export default function App() {
           <div className={'nav-group' + (libNavEdit ? ' lib-nav-edit' : '')}>
             <div className="nav-label-row">
               <div className="nav-label">Libraries</div>
-              {LIBS.length > 1 && (
+              {LIBS.length > 0 && (
                 <button
                   type="button"
                   className={'nav-edit-btn' + (libNavEdit ? ' on' : '')}
@@ -925,51 +958,65 @@ export default function App() {
                 </button>
               )}
             </div>
-            {libNavEdit && <div className="nav-edit-hint">Drag to reorder</div>}
+            {libNavEdit && <div className="nav-edit-hint">Drag to reorder · trash to delete</div>}
             {LIBS.map((lb) => (
-              <button
+              <div
                 key={lb.id}
-                type="button"
                 className={
-                  'nav-item' +
-                  (activeLibId === lb.id && !libNavEdit ? ' active' : '') +
+                  'nav-item-row' +
                   (libDropId === lb.id && libDragId && libDragId !== lb.id ? ' drop-target' : '') +
                   (libDragId === lb.id ? ' dragging' : '')
                 }
-                draggable={libNavEdit}
-                onClick={() => !libNavEdit && pickLib(lb)}
-                onDragStart={(e) => {
-                  if (!libNavEdit) return;
-                  setLibDragId(lb.id);
-                  try {
-                    e.dataTransfer.effectAllowed = 'move';
-                    e.dataTransfer.setData('text/plain', lb.id);
-                  } catch {
-                    /* ignore */
-                  }
-                }}
-                onDragEnd={() => {
-                  setLibDragId(null);
-                  setLibDropId(null);
-                }}
-                onDragOver={(e) => {
-                  if (!libNavEdit || !libDragId || libDragId === lb.id) return;
-                  e.preventDefault();
-                  setLibDropId(lb.id);
-                }}
-                onDrop={(e) => {
-                  if (!libNavEdit || !libDragId || libDragId === lb.id) return;
-                  e.preventDefault();
-                  reorderSidebarLibs(libDragId, lb.id);
-                  setLibDragId(null);
-                  setLibDropId(null);
-                }}
               >
-                {libNavEdit && <span className="nav-drag-grip">{I.stack({})}</span>}
-                {libIcon(lb.libKey)}
-                <span>{lb.title}</span>
-                {!libNavEdit && <span className="nav-count">{libCounts.get(lb.id) ?? '…'}</span>}
-              </button>
+                <button
+                  type="button"
+                  className={'nav-item' + (activeLibId === lb.id && !libNavEdit ? ' active' : '')}
+                  draggable={libNavEdit}
+                  onClick={() => !libNavEdit && pickLib(lb)}
+                  onDragStart={(e) => {
+                    if (!libNavEdit) return;
+                    setLibDragId(lb.id);
+                    try {
+                      e.dataTransfer.effectAllowed = 'move';
+                      e.dataTransfer.setData('text/plain', lb.id);
+                    } catch {
+                      /* ignore */
+                    }
+                  }}
+                  onDragEnd={() => {
+                    setLibDragId(null);
+                    setLibDropId(null);
+                  }}
+                  onDragOver={(e) => {
+                    if (!libNavEdit || !libDragId || libDragId === lb.id) return;
+                    e.preventDefault();
+                    setLibDropId(lb.id);
+                  }}
+                  onDrop={(e) => {
+                    if (!libNavEdit || !libDragId || libDragId === lb.id) return;
+                    e.preventDefault();
+                    reorderSidebarLibs(libDragId, lb.id);
+                    setLibDragId(null);
+                    setLibDropId(null);
+                  }}
+                >
+                  {libNavEdit && <span className="nav-drag-grip">{I.stack({})}</span>}
+                  {libIcon(lb.libKey)}
+                  <span className="nav-lib-title">{lb.title}</span>
+                  {!libNavEdit && <span className="nav-count">{libCounts.get(lb.id) ?? '…'}</span>}
+                </button>
+                {libNavEdit && (
+                  <button
+                    type="button"
+                    className="nav-lib-del"
+                    title={`Delete ${lb.title}`}
+                    aria-label={`Delete ${lb.title}`}
+                    onClick={() => setLibDeleteTarget(lb)}
+                  >
+                    {I.trash({})}
+                  </button>
+                )}
+              </div>
             ))}
           </div>
 
@@ -1587,6 +1634,16 @@ export default function App() {
         )}
 
       </div>
+
+      <ConfirmDialog
+        open={!!libDeleteTarget}
+        title={libDeleteTarget ? `Delete "${libDeleteTarget.title}"?` : 'Delete library?'}
+        message="Removes this library from the sidebar. Orbit Media Server libraries are deleted on the server too. Your files on disk are safe."
+        confirmLabel="Delete library"
+        busy={libDeleteBusy}
+        onCancel={() => !libDeleteBusy && setLibDeleteTarget(null)}
+        onConfirm={() => void confirmDeleteSidebarLibrary()}
+      />
     </ArtCtx.Provider>
   );
 }

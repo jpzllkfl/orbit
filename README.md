@@ -87,6 +87,31 @@ npm run build
 npm start          # http://localhost:8090
 ```
 
+## Orbit Desktop (Windows — like Plex)
+
+**Orbit Desktop** bundles the UI **and** Orbit Media Server on your PC (same as Plex app + Plex Media Server in one installer).
+
+**Try without installing:**
+
+```powershell
+cd orbit-app
+npm install
+npm run desktop    # opens Orbit + starts local server on http://127.0.0.1:8090
+```
+
+**Build a Windows installer (.exe):**
+
+```powershell
+npm install
+npm run dist:win
+```
+
+Installer output: `orbit-app/release/Orbit-Setup-1.0.0.exe`
+
+After install, launch **Orbit** from the Start menu. Use **Connections → Orbit Media Server → Add Library → Pick folder on this PC** to scan `C:\`, `T:\`, or any local drive.
+
+The NAS copy at `orbit.broken-eye.com` is a separate server install (Docker/Dockge) for remote access — your PC installer is for local libraries and offline use.
+
 ## Architecture notes
 
 - `src/lib/plex.js` — real Plex client; uses `/api/plex/proxy` and `/api/plex/media` when `VITE_PLEX_PROXY=1` (Docker build) or in Vite dev mode.
