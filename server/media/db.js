@@ -116,6 +116,25 @@ export function getDb() {
   return db;
 }
 
+export function resetDb() {
+  if (db) {
+    try {
+      db.close();
+    } catch {
+      /* ignore */
+    }
+    db = null;
+  }
+  for (const suffix of ['', '-wal', '-shm']) {
+    try {
+      fs.unlinkSync(DB_PATH + suffix);
+    } catch {
+      /* ignore */
+    }
+  }
+  return getDb();
+}
+
 export function mediaStats() {
   const d = getDb();
   const libraries = d.prepare('SELECT COUNT(*) AS n FROM libraries').get().n;

@@ -1,5 +1,6 @@
 # TrueNAS / Dockge — Windows T: = \\192.168.1.177\media
 # Host path on this NAS: /mnt/broken_eye/media (NOT /mnt/tank/media)
+# Single share mount so folder picker works like Plex (browse T: / share, pick subfolders).
 
 services:
   orbit:
@@ -11,9 +12,9 @@ services:
     environment:
       PORT: 8090
       ORBIT_DOCKER: "1"
-      ORBIT_OMS_AUTO_SEED: "1"
+      ORBIT_OMS_AUTO_SEED: "0"
       ORBIT_MEDIA_ROOT: ${ORBIT_MEDIA_ROOT:-/mnt/broken_eye/media}
-      # Free TMDB v3 key — artwork/metadata work out of the box (like Plex). Get one at themoviedb.org/settings/api
+      ORBIT_MEDIA_BROWSE_ROOT: /media/share
       ORBIT_TMDB_API_KEY: ${ORBIT_TMDB_API_KEY:-}
     user: "0:0"
     entrypoint:
@@ -22,20 +23,7 @@ services:
       - mkdir -p /app/server/data/states && chmod -R 777 /app/server/data && exec node server/index.js
     volumes:
       - ./data:/app/server/data
-      # --- TrueNAS media share (\\192.168.1.177\media) ---
-      - ${ORBIT_MEDIA_ROOT:-/mnt/broken_eye/media}/Anime:/media/anime:ro
-      - ${ORBIT_MEDIA_ROOT:-/mnt/broken_eye/media}/Comedy:/media/comedy:ro
-      - ${ORBIT_MEDIA_ROOT:-/mnt/broken_eye/media}/Documentaries:/media/documentaries:ro
-      - "${ORBIT_MEDIA_ROOT:-/mnt/broken_eye/media}/Kids Movies:/media/kids-movies:ro"
-      - "${ORBIT_MEDIA_ROOT:-/mnt/broken_eye/media}/Kids TV:/media/kids-tv:ro"
-      - ${ORBIT_MEDIA_ROOT:-/mnt/broken_eye/media}/movies:/media/movies:ro
-      - ${ORBIT_MEDIA_ROOT:-/mnt/broken_eye/media}/tv:/media/tv:ro
-      - ${ORBIT_MEDIA_ROOT:-/mnt/broken_eye/media}/remote:/media/remote:ro
-      - ${ORBIT_MEDIA_ROOT:-/mnt/broken_eye/media}/remote_d:/media/remote-d:ro
-      - ${ORBIT_MEDIA_ROOT:-/mnt/broken_eye/media}/remote_E:/media/remote-e:ro
-      - ${ORBIT_MEDIA_ROOT:-/mnt/broken_eye/media}/remote_I:/media/remote-i:ro
-      - ${ORBIT_MEDIA_ROOT:-/mnt/broken_eye/media}/remote_J:/media/remote-j:ro
-      - ${ORBIT_MEDIA_ROOT:-/mnt/broken_eye/media}/remote_L:/media/remote-l:ro
+      - ${ORBIT_MEDIA_ROOT:-/mnt/broken_eye/media}:/media/share:ro
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"

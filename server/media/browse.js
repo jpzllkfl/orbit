@@ -1,18 +1,16 @@
 import fs from 'fs';
 import path from 'path';
-import { DEFAULT_OMS_LIBRARIES } from './catalog.js';
-import { listAllFolderPaths, listLibraries } from './libraries.js';
 
 function dockerMode() {
   return process.env.ORBIT_DOCKER === '1';
 }
 
-function envRoots() {
-  const raw = process.env.ORBIT_MEDIA_ROOTS || '';
-  return raw
-    .split(/[;|]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+function mediaBrowseRoot() {
+  const configured = (process.env.ORBIT_MEDIA_BROWSE_ROOT || '').trim();
+  if (configured && fs.existsSync(configured)) return path.resolve(configured);
+  if (fs.existsSync('/media/share')) return '/media/share';
+  if (dockerMode() && fs.existsSync('/media')) return '/media';
+  return null;
 }
 
 function windowsDrives() {
@@ -28,6 +26,7 @@ function windowsDrives() {
   return out;
 }
 
+/** Only top-level browse entry points — never pre-list library folders or drive subfolders. */
 export function allowedRoots() {
   const seen = new Set();
   const out = [];
@@ -40,31 +39,20 @@ export function allowedRoots() {
     out.push(resolved);
   };
 
-  for (const r of envRoots()) add(r);
-  for (const p of listAllFolderPaths()) add(p);
-  for (const lib of listLibraries()) {
-    for (const f of lib.folders || []) add(f.path);
-  }
-
-  if (fs.existsSync('/media')) {
-    add('/media');
-    try {
-      for (const entry of fs.readdirSync('/media', { withFileTypes: true })) {
-        if (entry.isDirectory() && !entry.name.startsWith('.')) {
-          add(path.join('/media', entry.name));
-        }
-      }
-    } catch {
-      /* ignore unreadable /media */
-    }
-  }
+  const mediaRoot = mediaBrowseRoot();
+  if (mediaRoot) add(mediaRoot);
 
   if (!dockerMode() && process.platform === 'win32') {
     for (const d of windowsDrives()) add(d);
   }
 
-  if (!out.length) add(process.cwd());
+  const envExtra = (process.env.ORBIT_MEDIA_ROOTS || '')
+    .split(/[;|]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const r of envExtra) add(r);
 
+  if (!out.length) add(process.cwd());
   return out;
 }
 
@@ -83,24 +71,16 @@ function validatePath(targetPath) {
   throw new Error('That folder is outside locations Orbit can access.');
 }
 
-function browseLabel(rootPath) {
-  const def = DEFAULT_OMS_LIBRARIES.find((l) => l.mount === rootPath);
-  if (def) return `${def.name} — broken_eye/media/${def.hostDir}`;
-  if (rootPath === '/media') return 'All media folders';
-  if (rootPath.startsWith('/media/')) {
-    const leaf = path.basename(rootPath);
-    return `${leaf} — broken_eye/media/${leaf}`;
+function rootLabel(rootPath) {
+  if (rootPath === '/media/share' || rootPath === '/media') {
+    return 'Media (T: — \\\\192.168.1.177\\media)';
   }
+  if (/^[A-Z]:\\$/i.test(rootPath)) return rootPath;
   return rootPath;
 }
 
 export function browseRoots() {
-  let roots = allowedRoots();
-  const hasMediaChildren = roots.some((r) => r.startsWith('/media/') && r !== '/media');
-  if (hasMediaChildren) {
-    roots = roots.filter((r) => r !== '/media');
-  }
-  return roots.map((rootPath) => {
+  return allowedRoots().map((rootPath) => {
     let exists = false;
     let readable = false;
     try {
@@ -115,8 +95,7 @@ export function browseRoots() {
     return {
       path: rootPath,
       name: path.basename(rootPath.replace(/[/\\]+$/, '')) || rootPath,
-      label: browseLabel(rootPath),
-      hostHint: browseLabel(rootPath),
+      label: rootLabel(rootPath),
       exists,
       readable,
     };

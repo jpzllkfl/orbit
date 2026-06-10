@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { getDb } from './db.js';
+import { getDb, resetDb } from './db.js';
 
 function newId(prefix = 'lib') {
   return prefix + '_' + Math.random().toString(36).slice(2, 11);
@@ -145,10 +145,7 @@ export function removeLibrary(id) {
 }
 
 export function wipeAllLibraries() {
-  const d = getDb();
-  d.exec('DELETE FROM media_items');
-  d.exec('DELETE FROM library_folders');
-  d.exec('DELETE FROM libraries');
+  resetDb();
   return { ok: true };
 }
 
