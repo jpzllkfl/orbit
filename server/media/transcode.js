@@ -1,11 +1,10 @@
 import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { getOrbitDataDir } from '../data-dir.js';
 import { getMediaItemById } from './importTree.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CACHE_ROOT = path.join(__dirname, '..', 'data', 'transcode');
+const CACHE_ROOT = path.join(getOrbitDataDir(), 'transcode');
 const active = new Map();
 
 function transcodeDir(itemId) {

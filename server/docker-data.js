@@ -1,20 +1,19 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { getOrbitDataDir } from './data-dir.js';
 
-const DATA_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data');
-
-/** Ensure /app/server/data is writable in Docker (named volumes often arrive root-owned). */
+/** Ensure server data dir exists (Docker volume, Electron userData, or dev). */
 export function ensureDockerDataDir() {
-  if (process.env.ORBIT_DOCKER !== '1') return;
-
+  const dataDir = getOrbitDataDir();
   try {
-    fs.mkdirSync(path.join(DATA_DIR, 'states'), { recursive: true, mode: 0o777 });
-    fs.chmodSync(DATA_DIR, 0o777);
+    fs.mkdirSync(path.join(dataDir, 'states'), { recursive: true });
+    if (process.env.ORBIT_DOCKER === '1') {
+      fs.chmodSync(dataDir, 0o777);
+    }
   } catch (err) {
     if (err?.code === 'EACCES' && typeof process.getuid === 'function' && process.getuid() === 0) {
-      fs.chmodSync(DATA_DIR, 0o777);
-      fs.mkdirSync(path.join(DATA_DIR, 'states'), { recursive: true, mode: 0o777 });
+      fs.chmodSync(dataDir, 0o777);
+      fs.mkdirSync(path.join(dataDir, 'states'), { recursive: true, mode: 0o777 });
       return;
     }
     throw err;

@@ -1,10 +1,9 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { getOrbitDataDir } from './data-dir.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, 'data');
+const DATA_DIR = getOrbitDataDir();
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
 const STATES_DIR = path.join(DATA_DIR, 'states');
@@ -12,6 +11,7 @@ const STATES_DIR = path.join(DATA_DIR, 'states');
 const SESSION_DAYS = 90;
 
 function ensureData() {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.mkdirSync(STATES_DIR, { recursive: true });
 }
 

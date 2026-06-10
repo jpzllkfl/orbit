@@ -2,9 +2,11 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { DatabaseSync } from 'node:sqlite';
+import { getOrbitDataDir } from '../data-dir.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = process.env.ORBIT_DATA_DIR || path.join(__dirname, '..', 'data');
+
+const DATA_DIR = getOrbitDataDir();
 const DB_PATH = process.env.ORBIT_MEDIA_DB || path.join(DATA_DIR, 'orbit-media.sqlite');
 
 let db = null;
