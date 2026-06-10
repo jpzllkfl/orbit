@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Lib } from '../lib';
 import { fetchOmsTree, replaceOmsInTree } from '../lib/importLibraryFromOms';
+import { resetAppStateCache } from '../lib/appState';
 import { syncOmsAfterChange } from '../lib/omsSync';
 import { displayMediaPath } from '../lib/omsPaths';
 import { resetOrbitInstance } from '../lib/orbitReset';
@@ -276,15 +277,24 @@ export function MediaServerPanel({
   }
 
   async function wipeAllLibraries() {
-    if (!confirm('Reset everything? Clears all libraries, folders, and indexed files.')) return;
-    if (!confirm('Really start completely fresh?')) return;
+    if (
+      !confirm(
+        'Delete EVERYTHING? All libraries, all 3,000+ titles in the sidebar, Plex settings, and cloud sync. Your video files on disk are safe.',
+      )
+    ) {
+      return;
+    }
+    if (!confirm('Last chance — wipe the sidebar and start completely empty?')) return;
     setBusy(true);
-    setImportMsg('Resetting…');
+    setError('');
+    setImportMsg('Deleting…');
     try {
       const freshTree = await resetOrbitInstance();
+      resetAppStateCache(false);
       onImported?.(freshTree);
       await reload();
-      setImportMsg('Reset complete. Add a Movies or TV library above.');
+      setImportMsg('Everything cleared. Reloading…');
+      window.setTimeout(() => window.location.reload(), 400);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Reset failed');
       setImportMsg('');

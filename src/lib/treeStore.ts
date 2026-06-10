@@ -233,6 +233,69 @@ export const TreeStore = {
     idbHasTree = false;
   },
 
+  /** Wait until IDB + localStorage tree is gone (for reset). */
+  async clearAsync(): Promise<void> {
+    if (persistTimer) {
+      clearTimeout(persistTimer);
+      persistTimer = null;
+    }
+    try {
+      localStorage.removeItem(LS);
+    } catch {
+      /* ignore */
+    }
+    parsedCache = null;
+    idbHasTree = false;
+    if (useIdb()) {
+      await ensureIdbReady();
+      await idbDel(LS);
+    }
+  },
+
+  /** Persist immediately (reset must not wait 2s debounce). */
+  async saveImmediate(tree: OrbitNode): Promise<void> {
+    if (persistTimer) {
+      clearTimeout(persistTimer);
+      persistTimer = null;
+    }
+    parsedCache = slimTreeForMemory(tree);
+    const json = JSON.stringify(parsedCache);
+    if (useIdb()) {
+      await ensureIdbReady();
+      if (!tree.children?.length) {
+        await idbDel(LS);
+        idbHasTree = false;
+        try {
+          localStorage.removeItem(LS);
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
+      await idbSet(LS, json);
+      idbHasTree = true;
+      try {
+        localStorage.removeItem(LS);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    if (!tree.children?.length) {
+      try {
+        localStorage.removeItem(LS);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    try {
+      localStorage.setItem(LS, json);
+    } catch {
+      /* ignore */
+    }
+  },
+
   invalidate() {
     parsedCache = undefined;
   },

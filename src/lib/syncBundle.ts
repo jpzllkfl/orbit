@@ -104,6 +104,11 @@ const SKIP_ON_DESKTOP_PREFIX = 'orbit.watched.';
 
 export function applySyncBundle(bundle: Record<string, string>) {
   if (!bundle || typeof bundle !== 'object') return 0;
+  const entries = orderedSyncEntries(bundle);
+  if (!entries.length) {
+    void TreeStore.clearAsync();
+    return 0;
+  }
   let applied = 0;
   let treeIngested = false;
   const desktop = isDesktopApp();

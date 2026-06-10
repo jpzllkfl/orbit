@@ -357,8 +357,9 @@ export default function App() {
     TreeStore.save(merged);
     setTree(merged);
     setPath([merged.id]);
-    liveTreeRef.current = treeHasContent(merged);
-    setLibraryReady(treeHasContent(merged));
+    const hasContent = (merged.children || []).some((c) => c.type === 'library');
+    liveTreeRef.current = hasContent;
+    setLibraryReady(hasContent);
     invalidateTitleIndex();
     resetAppStateCache(false);
     setConnVer((v) => v + 1);
