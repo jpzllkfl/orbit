@@ -180,13 +180,29 @@ export default function App() {
     Lib.loadKey();
     Plex.reloadFromStorage();
     Lib.reloadFromStorage();
-    resetAppStateCache(true);
+    if (OrbitAccount.signedIn) {
+      try {
+        await OrbitAccount.pullSync();
+      } catch {
+        /* offline */
+      }
+    }
+    resetAppStateCache(false);
     const hasTree = !!(Conn.load()?.connected && Conn.load()?.live && TreeStore.load());
     liveTreeRef.current = hasTree || hasPersistedTree();
-    const fresh = await loadAppStateAsync();
+    let fresh = await loadAppStateAsync();
+    if (OrbitAccount.signedIn) {
+      try {
+        const { syncOmsTreeFromHome } = await import('./lib/omsSync');
+        const omsMerged = await syncOmsTreeFromHome(fresh.tree);
+        if (omsMerged) fresh = { tree: omsMerged, path: [omsMerged.id] };
+      } catch {
+        /* offline */
+      }
+    }
     setTree(fresh.tree);
     setPath(fresh.path);
-    setLibraryReady(liveTreeRef.current || guestMode);
+    setLibraryReady(liveTreeRef.current || guestMode || treeHasContent(fresh.tree));
     setConnVer((v) => v + 1);
     setVer((v) => v + 1);
     if (Conn.load()?.connected) setShowWizard(false);
@@ -227,6 +243,16 @@ export default function App() {
     }, 60000);
     return () => window.clearTimeout(t);
   }, [connVer]);
+
+  useEffect(() => {
+    if (!OrbitAccount.signedIn) return;
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible' || !OrbitAccount.shouldRefreshSync()) return;
+      setBootAttempt((a) => a + 1);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [OrbitAccount.signedIn]);
   useEffect(() => {
     if (!curating) {
       setDrag(null);

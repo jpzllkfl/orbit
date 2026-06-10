@@ -1,6 +1,6 @@
 import type { MediaLibrary } from '../types/media';
 import type { OrbitNode } from '../types/orbit';
-import { fetchOmsTree, mergeOmsIntoTree } from './importLibraryFromOms';
+import { fetchOmsTree, mergeOmsIntoTree, replaceOmsInTree } from './importLibraryFromOms';
 import { seedArtFromOms } from './importUtils';
 import { OrbitAccount } from './orbitAccount';
 import { OrbitMedia } from './orbitMedia';
@@ -78,16 +78,24 @@ export function treeHasOmsContent(tree: OrbitNode | null | undefined): boolean {
 /** If home OMS has scanned titles but the synced tree does not, merge them in. */
 export async function maybeMergeOmsTree(tree: OrbitNode): Promise<OrbitNode | null> {
   if (treeHasOmsContent(tree)) return null;
+  return syncOmsTreeFromHome(tree, { mergeOnly: true });
+}
+
+/** Refresh OMS library nodes from the home server (posters, titles, new libs). */
+export async function syncOmsTreeFromHome(
+  tree: OrbitNode,
+  opts: { mergeOnly?: boolean } = {},
+): Promise<OrbitNode | null> {
   try {
     const st = await OrbitMedia.status();
     if (!st.items || st.items < 1) return null;
     const result = await fetchOmsTree();
     if (!result.tree) return null;
-    const merged = mergeOmsIntoTree(tree, result.tree);
+    const merged = opts.mergeOnly ? mergeOmsIntoTree(tree, result.tree) : replaceOmsInTree(tree, result.tree);
     seedArtFromOms(merged);
     TreeStore.save(merged);
     if (OrbitAccount.signedIn && OrbitAccount.syncReady) {
-      await OrbitAccount.pushSync();
+      await OrbitAccount.pushSyncNow();
     }
     return merged;
   } catch {

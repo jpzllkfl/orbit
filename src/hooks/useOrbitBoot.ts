@@ -17,7 +17,7 @@ import {
   plexIsConfigured,
 } from '../lib';
 import { FRESH_RESET_KEY } from '../lib/orbitReset';
-import { maybeMergeOmsTree } from '../lib/omsSync';
+import { syncOmsTreeFromHome } from '../lib/omsSync';
 import { invalidateTitleIndex } from '../lib/treeIndex';
 import type { OrbitUser } from '../lib/orbitAccount';
 import type { OrbitNode } from '../types/orbit';
@@ -176,7 +176,7 @@ export function useOrbitBoot(opts: {
 
         if (!alive) return;
         if (user && !freshReset) {
-          const omsMerged = await maybeMergeOmsTree(state.tree);
+          const omsMerged = await syncOmsTreeFromHome(state.tree);
           if (omsMerged) {
             state = { tree: omsMerged, path: [omsMerged.id] };
             resetAppStateCache(false);

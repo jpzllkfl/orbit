@@ -1,5 +1,11 @@
+import { isDesktopApp } from './isDesktop.ts';
+
 /** Canonical Orbit server (auth + OMS). Plex-style: one home, all clients connect to it. */
 const HOME_LS = 'orbit.server.home.v1';
+
+/** Cloud home used by packaged desktop when no override is saved (must match your live site). */
+export const DEFAULT_CLOUD_HOME =
+  (import.meta.env.VITE_ORBIT_HOME as string | undefined)?.trim() || 'https://orbit.broken-eye.com';
 
 export function normalizeOrigin(url: string): string {
   const t = (url || '').trim().replace(/\/+$/, '');
@@ -23,6 +29,15 @@ function isPrivateHost(url: string): boolean {
   }
 }
 
+function isLocalHome(url: string): boolean {
+  try {
+    const h = new URL(url).hostname.toLowerCase();
+    return h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0';
+  } catch {
+    return false;
+  }
+}
+
 export function getHomeServer(): string {
   const pageOrigin = typeof window !== 'undefined' ? window.location.origin : '';
   try {
@@ -33,11 +48,17 @@ export function getHomeServer(): string {
       if (pageOrigin && isPrivateHost(norm) && !isPrivateHost(pageOrigin)) {
         return pageOrigin;
       }
+      // Packaged desktop must not use loopback as home — that is a separate local DB from the web app.
+      if (isDesktopApp() && isLocalHome(norm)) {
+        return DEFAULT_CLOUD_HOME;
+      }
       return norm;
     }
   } catch {
     /* ignore */
   }
+  // Desktop installer: default to cloud home so sign-in shares libraries with web/iPad.
+  if (isDesktopApp()) return DEFAULT_CLOUD_HOME;
   return pageOrigin || '';
 }
 

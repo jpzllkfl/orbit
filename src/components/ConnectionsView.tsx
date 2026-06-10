@@ -78,8 +78,11 @@ export function ConnectionsView({
     if (!OrbitAccount.signedIn) return;
     setSyncBusy(true);
     try {
-      await OrbitAccount.pushSync();
+      await OrbitAccount.pullSync();
+      await OrbitAccount.pushSyncNow();
       setLastCloudSync(Date.now());
+      onBump?.();
+      onAccountChange?.();
     } finally {
       setSyncBusy(false);
     }
@@ -161,8 +164,8 @@ export function ConnectionsView({
           )}
           {isDesktopApp() && (
             <p className="conns-sub" style={{ marginTop: 8 }}>
-              Set this to your live site (e.g. <code>https://orbit.broken-eye.com</code>), save, then sign in — desktop
-              will use the same media paths and library as the web app.
+              Desktop defaults to your live site so libraries match web and iPad. Sign in with the same email on every
+              device — your sidebar and artwork stay in sync.
             </p>
           )}
           <div className="conns-acct">

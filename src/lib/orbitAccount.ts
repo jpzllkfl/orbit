@@ -105,6 +105,7 @@ export const OrbitAccount = {
     saveSession(token, user);
     rememberHomeServer();
     syncHydrated = false;
+    await OrbitAccount.pullSync();
     return user;
   },
 
@@ -192,5 +193,10 @@ export const OrbitAccount = {
 
   get syncReady() {
     return syncHydrated;
+  },
+
+  /** True when a fresh pull from the account is worthwhile (e.g. tab refocus). */
+  shouldRefreshSync(maxAgeMs = 45000) {
+    return OrbitAccount.signedIn && Date.now() - lastPullAt > maxAgeMs;
   },
 };
