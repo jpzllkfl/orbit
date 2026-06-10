@@ -19,22 +19,8 @@ const HOST = getArg('--host', 'http://192.168.1.177:5001');
 const USER = getArg('--user', process.env.DOCKGE_USER || 'admin');
 const PASS = getArg('--pass', process.env.DOCKGE_PASS || '');
 const STACK_HINT = getArg('--stack', 'orbit');
-const BUILTIN_TMDB_KEY = 'b379792391747f1606e1d7a933dd2aea';
-
 function normalizeYaml(yaml) {
   return String(yaml || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-}
-
-function injectEnv(yaml, key, value) {
-  let text = normalizeYaml(yaml);
-  const line = `      ${key}: "${value}"`;
-  if (new RegExp(`^\\s*${key}:`, 'm').test(text)) {
-    return text.replace(new RegExp(`^\\s*${key}:.*$`, 'm'), line);
-  }
-  if (/^\s+environment:\s*$/m.test(text)) {
-    return text.replace(/(^\s+environment:\s*$)/m, `$1\n${line}`);
-  }
-  return text;
 }
 
 function agent(socket, action, ...rest) {
@@ -136,7 +122,10 @@ async function main() {
 
   // Redeploy with local compose (ensures latest yaml) + build via compose up --build
   const composeENV = detail.stack?.composeENV || '';
-  let composeYAML = detail.stack?.composeYAML || fs.readFileSync(path.join(__dirname, '..', 'docker-compose.yml'), 'utf8');
+  // Prefer repo compose (correct env + TMDB) — keep Dockge stack name only.
+  let composeYAML = normalizeYaml(
+    fs.readFileSync(path.join(__dirname, '..', 'docker-compose.yml'), 'utf8'),
+  );
 
   const GIT_SHA = getArg('--sha', 'main');
   // Docker git context only accepts branch/tag names reliably — always build from main.
@@ -150,7 +139,6 @@ async function main() {
       `context: ${GIT_CONTEXT}`,
     )
     .replace(/^\s*image:\s*orbit[^\n]*$/m, `    image: orbit:${IMAGE_TAG}`);
-  composeYAML = injectEnv(composeYAML, 'ORBIT_TMDB_API_KEY', BUILTIN_TMDB_KEY);
 
   console.log('Stopping stack...');
   const down = await agent(socket, 'downStack', stack.name);
