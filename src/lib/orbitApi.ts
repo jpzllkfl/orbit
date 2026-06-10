@@ -1,4 +1,4 @@
-import { apiUrl } from './orbitServer';
+import { authApiUrl, mediaApiUrl } from './orbitServer';
 
 function authToken(): string | null {
   try {
@@ -8,7 +8,7 @@ function authToken(): string | null {
   }
 }
 
-/** Fetch Orbit API on home server (local or remote) with auth when signed in. */
+/** Fetch Orbit auth API on the account home server. */
 export async function orbitApiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const headers: Record<string, string> = {
     ...(init.headers as Record<string, string>),
@@ -18,5 +18,18 @@ export async function orbitApiFetch(path: string, init: RequestInit = {}): Promi
   if (init.body && !headers['Content-Type'] && !headers['content-type']) {
     headers['Content-Type'] = 'application/json';
   }
-  return fetch(apiUrl(path), { ...init, headers });
+  return fetch(authApiUrl(path), { ...init, headers });
+}
+
+/** Fetch Orbit Media Server API (local on desktop, cloud on web). */
+export async function orbitMediaFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers: Record<string, string> = {
+    ...(init.headers as Record<string, string>),
+  };
+  const token = authToken();
+  if (token) headers.Authorization = 'Bearer ' + token;
+  if (init.body && !headers['Content-Type'] && !headers['content-type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+  return fetch(mediaApiUrl(path), { ...init, headers });
 }

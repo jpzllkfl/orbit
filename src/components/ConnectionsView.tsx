@@ -164,8 +164,8 @@ export function ConnectionsView({
           )}
           {isDesktopApp() && (
             <p className="conns-sub" style={{ marginTop: 8 }}>
-              Desktop defaults to your live site so libraries match web and iPad. Sign in with the same email on every
-              device — your sidebar and artwork stay in sync.
+              Desktop scans folders on this PC (local media server) and syncs your library layout to your account. Sign
+              in with the same email on web and iPad, then tap <strong>Sync now</strong>.
             </p>
           )}
           <div className="conns-acct">

@@ -1,6 +1,6 @@
 import type { OrbitNode } from '../types/orbit';
-import { orbitApiFetch } from './orbitApi';
-import { apiUrl } from './orbitServer';
+import { orbitMediaFetch } from './orbitApi';
+import { mediaApiUrl } from './orbitServer';
 
 export type OmsImportResult = {
   tree: OrbitNode | null;
@@ -10,7 +10,7 @@ export type OmsImportResult = {
 };
 
 export async function fetchOmsTree(): Promise<OmsImportResult> {
-  const res = await orbitApiFetch('/api/media/import-tree');
+  const res = await orbitMediaFetch('/api/media/import-tree');
   const json = (await res.json().catch(() => ({}))) as OmsImportResult & { error?: string };
   if (!res.ok) {
     return { tree: null, error: json.error || 'Could not load Orbit Media Server libraries.' };
@@ -84,11 +84,11 @@ export function removeOmsLibraryFromTree(
 }
 
 export function omsStreamUrl(itemId: string): string {
-  return apiUrl('/api/media/stream/' + encodeURIComponent(itemId));
+  return mediaApiUrl('/api/media/stream/' + encodeURIComponent(itemId));
 }
 
 export function omsTranscodeUrl(itemId: string): string {
-  return apiUrl('/api/media/transcode/' + encodeURIComponent(itemId) + '/stream.m3u8');
+  return mediaApiUrl('/api/media/transcode/' + encodeURIComponent(itemId) + '/stream.m3u8');
 }
 
 export function nodeHasOmsPlayback(node: OrbitNode): boolean {

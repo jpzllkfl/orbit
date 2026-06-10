@@ -193,9 +193,11 @@ export default function App() {
     let fresh = await loadAppStateAsync();
     if (OrbitAccount.signedIn) {
       try {
-        const { syncOmsTreeFromHome } = await import('./lib/omsSync');
-        const omsMerged = await syncOmsTreeFromHome(fresh.tree);
-        if (omsMerged) fresh = { tree: omsMerged, path: [omsMerged.id] };
+        const { syncOmsTreeFromHome, treeHasOmsContent } = await import('./lib/omsSync');
+        if (!treeHasOmsContent(fresh.tree)) {
+          const omsMerged = await syncOmsTreeFromHome(fresh.tree);
+          if (omsMerged) fresh = { tree: omsMerged, path: [omsMerged.id] };
+        }
       } catch {
         /* offline */
       }

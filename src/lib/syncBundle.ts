@@ -17,6 +17,7 @@ const SYNC_KEY_PREFIXES = [
   'orbit.watched.',
   'orbit.oms.',
   'orbit.server.home.',
+  'orbit.desktop.media.',
 ];
 
 const SKIP_KEYS = new Set(['orbit.session.v1', 'orbit.art.cache.v1']);
@@ -70,6 +71,7 @@ const APPLY_FIRST = [
   'orbit.plex.conn',
   'orbit.tmdb.v1',
   'orbit.oms.libraries.v1',
+  'orbit.desktop.media.v1',
 ];
 
 /** Drop embedded base64 art — it balloons sync size and can exceed localStorage quota. */

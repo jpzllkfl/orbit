@@ -7,7 +7,13 @@ export type VideoBounds = {
 
 export type OrbitNativeAPI = {
   available: boolean;
-  getInfo(): Promise<{ available: boolean; mpvPath: string | null; platform?: string }>;
+  getInfo(): Promise<{
+    available: boolean;
+    mpvPath: string | null;
+    platform?: string;
+    localPort?: number;
+    mediaOrigin?: string;
+  }>;
   play(opts: { url: string; startSec?: number; bounds?: VideoBounds }): Promise<void>;
   pause(paused: boolean): Promise<void>;
   seek(sec: number): Promise<void>;

@@ -1,5 +1,6 @@
 import { orbitApiFetch } from './orbitApi';
-import { getHomeServer, setHomeServer } from './orbitServer';
+import { DEFAULT_CLOUD_HOME, getHomeServer, setHomeServer } from './orbitServer';
+import { isDesktopApp } from './isDesktop';
 import { applySyncBundle, collectSyncBundle } from './syncBundle';
 import { reconcileOmsLibrariesFromSync } from './omsSync';
 import { TreeStore } from './treeStore.ts';
@@ -53,7 +54,11 @@ async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
 }
 
 function rememberHomeServer() {
-  if (typeof window === 'undefined' || isDesktopApp()) return;
+  if (typeof window === 'undefined') return;
+  if (isDesktopApp()) {
+    setHomeServer(DEFAULT_CLOUD_HOME);
+    return;
+  }
   if (!localStorage.getItem('orbit.server.home.v1')) {
     setHomeServer(window.location.origin);
   }

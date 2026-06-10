@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
+const os = require('os');
 const path = require('path');
 const http = require('http');
 const { pathToFileURL } = require('url');
@@ -236,11 +237,28 @@ ipcMain.handle('orbit-shell:pick-folder', async () => {
   return result.filePaths[0];
 });
 
-ipcMain.handle('orbit-native:info', async () => ({
-  available: mpv.available,
-  mpvPath: mpv.mpvPath,
-  platform: process.platform,
-}));
+function lanAddresses() {
+  const ips = new Set();
+  for (const entries of Object.values(os.networkInterfaces())) {
+    for (const iface of entries || []) {
+      const v4 = iface.family === 'IPv4' || iface.family === 4;
+      if (v4 && !iface.internal && iface.address) ips.add(iface.address);
+    }
+  }
+  return [...ips];
+}
+
+ipcMain.handle('orbit-native:info', async () => {
+  const lan = lanAddresses()[0];
+  const mediaOrigin = lan ? `http://${lan}:${activePort}` : `http://127.0.0.1:${activePort}`;
+  return {
+    available: mpv.available,
+    mpvPath: mpv.mpvPath,
+    platform: process.platform,
+    localPort: activePort,
+    mediaOrigin,
+  };
+});
 
 ipcMain.handle('orbit-native:bounds', async (_evt, bounds) => {
   if (!nativePlaying) return;
