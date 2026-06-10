@@ -59,8 +59,8 @@ export function getLibrary(id) {
 
 export function findLibraryByNameType(name, type) {
   const row = getDb()
-    .prepare('SELECT * FROM libraries WHERE name = ? AND type = ?')
-    .get(name.trim(), type);
+    .prepare('SELECT * FROM libraries WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) AND type = ?')
+    .get(name, type);
   return rowToLibrary(row);
 }
 
@@ -101,9 +101,11 @@ function createLibrary({ name, type }) {
   return getLibrary(id);
 }
 
-/** Plex-style: one library (Movies) with many folder paths. Reuses library if name+type match. */
+/** Plex-style: named library with many folder paths. Reuses library if name+type match. */
 export function addFolderToLibrary({ name, type, folderPath }) {
-  const trimmedName = (name || '').trim() || (type === 'movie' ? 'Movies' : 'TV Shows');
+  const trimmedName = (name || '').trim();
+  if (!trimmedName) throw new Error('Library name is required.');
+  if (type !== 'movie' && type !== 'tv') throw new Error('Library type must be movie or tv.');
   const existing = findLibraryByNameType(trimmedName, type);
   const lib = existing || createLibrary({ name: trimmedName, type });
   const folder = addFolderRow(lib.id, folderPath);

@@ -18,27 +18,41 @@ function canNativeFolderPick() {
   return typeof window !== 'undefined' && typeof window.orbitNative?.pickFolder === 'function';
 }
 
-type WizardStep = 'type' | 'folder';
+function folderLeafName(p: string) {
+  return p.replace(/[/\\]+$/, '').split(/[/\\]/).pop() || '';
+}
+
+type WizardStep = 'type' | 'folder' | 'name';
 
 function AddLibraryWizard({
   onClose,
   onDone,
   existingLibrary,
+  existingLibraries,
 }: {
   onClose: () => void;
   onDone: (libraryId: string) => Promise<void>;
   existingLibrary?: MediaLibrary | null;
+  existingLibraries?: MediaLibrary[];
 }) {
   const [step, setStep] = useState<WizardStep>(existingLibrary ? 'folder' : 'type');
   const [type, setType] = useState<'movie' | 'tv'>(existingLibrary?.type || 'movie');
   const [folderPath, setFolderPath] = useState('');
+  const [name, setName] = useState(existingLibrary?.name || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const libName = existingLibrary?.name || (type === 'movie' ? 'Movies' : 'TV Shows');
+  const matchingLib = existingLibraries?.find(
+    (l) => l.name.trim().toLowerCase() === name.trim().toLowerCase() && l.type === type,
+  );
 
-  async function submit(path: string) {
+  async function submit(path: string, libraryName: string) {
     if (!path.trim()) return;
+    const trimmedName = libraryName.trim();
+    if (!trimmedName) {
+      setError('Library name is required.');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -48,7 +62,7 @@ function AddLibraryWizard({
         libraryId = r.library.id;
       } else {
         const r = await OrbitMedia.addLibrary({
-          name: libName,
+          name: trimmedName,
           type,
           folderPath: path.trim(),
         });
@@ -67,11 +81,30 @@ function AddLibraryWizard({
     if (!canNativeFolderPick()) return;
     try {
       const picked = await window.orbitNative!.pickFolder!();
-      if (picked) await submit(picked);
+      if (!picked) return;
+      if (existingLibrary) {
+        await submit(picked, existingLibrary.name);
+      } else {
+        setFolderPath(picked);
+        setName(folderLeafName(picked));
+        setStep('name');
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not open folder picker');
     }
   }
+
+  function onFolderPicked(p: string) {
+    setFolderPath(p);
+    if (existingLibrary) {
+      submit(p, existingLibrary.name);
+    } else {
+      setName(folderLeafName(p));
+      setStep('name');
+    }
+  }
+
+  const typeLabel = type === 'movie' ? 'Movie' : 'TV Show';
 
   return (
     <div className="modal-scrim" onClick={onClose}>
@@ -85,7 +118,10 @@ function AddLibraryWizard({
 
         {step === 'type' && !existingLibrary && (
           <div className="oms-wizard-step">
-            <p className="oms-wizard-lead">Select library type</p>
+            <p className="oms-wizard-lead">
+              What kind of files are in this folder? This controls how Orbit scans them — not what the library is
+              called.
+            </p>
             <div className="oms-type-cards">
               <button
                 type="button"
@@ -93,8 +129,8 @@ function AddLibraryWizard({
                 onClick={() => setType('movie')}
               >
                 <span className="oms-type-card-ic">{ic.film({})}</span>
-                <span className="oms-type-card-title">Movies</span>
-                <span className="oms-type-card-sub">Add movie folders from any drive</span>
+                <span className="oms-type-card-title">Movie</span>
+                <span className="oms-type-card-sub">One file = one title</span>
               </button>
               <button
                 type="button"
@@ -102,8 +138,8 @@ function AddLibraryWizard({
                 onClick={() => setType('tv')}
               >
                 <span className="oms-type-card-ic">{ic.tv({})}</span>
-                <span className="oms-type-card-title">TV Shows</span>
-                <span className="oms-type-card-sub">Add show folders from any drive</span>
+                <span className="oms-type-card-title">TV Show</span>
+                <span className="oms-type-card-sub">Episodes & seasons</span>
               </button>
             </div>
             <div className="modal-actions">
@@ -120,7 +156,7 @@ function AddLibraryWizard({
         {step === 'folder' && (
           <div className="oms-wizard-step">
             <p className="oms-wizard-lead">
-              Browse to a folder for <strong>{libName}</strong>. You can add more drives later to the same library.
+              Browse to a folder ({typeLabel} scan). You can add more folders to the same library later.
             </p>
             {!isUsingRemoteHome() && canNativeFolderPick() && (
               <button type="button" className="conns-btn sm oms-native-pick" disabled={busy} onClick={pickNativeFolder}>
@@ -130,13 +166,9 @@ function AddLibraryWizard({
             <FolderBrowserModal
               embedded
               onClose={onClose}
-              onSelect={(p) => {
-                setFolderPath(p);
-                submit(p);
-              }}
+              onSelect={onFolderPicked}
             />
-            {folderPath && error && <p className="conns-err">{error}</p>}
-            {error && !folderPath && <p className="conns-err">{error}</p>}
+            {error && <p className="conns-err">{error}</p>}
             <div className="modal-actions">
               {!existingLibrary && (
                 <button type="button" className="btn ghost" onClick={() => setStep('type')} disabled={busy}>
@@ -148,6 +180,46 @@ function AddLibraryWizard({
                   Cancel
                 </button>
               )}
+            </div>
+          </div>
+        )}
+
+        {step === 'name' && !existingLibrary && (
+          <div className="oms-wizard-step">
+            <p className="oms-wizard-lead">Name this library — e.g. Anime, Movies, Kids Movies.</p>
+            <label className="oms-wizard-name-field">
+              Library name
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Anime"
+                autoFocus
+              />
+            </label>
+            <p className="conns-sub oms-wizard-path">
+              Folder: <code>{displayMediaPath(folderPath)}</code>
+            </p>
+            <p className="conns-sub oms-wizard-path">
+              Scan as: <strong>{typeLabel}</strong>
+            </p>
+            {matchingLib && (
+              <p className="conns-sub oms-msg">
+                Adds this folder to your existing <strong>{matchingLib.name}</strong> library.
+              </p>
+            )}
+            {error && <p className="conns-err">{error}</p>}
+            <div className="modal-actions">
+              <button type="button" className="btn ghost" onClick={() => setStep('folder')} disabled={busy}>
+                Back
+              </button>
+              <button
+                type="button"
+                className="btn primary"
+                disabled={busy || !name.trim() || !folderPath.trim()}
+                onClick={() => submit(folderPath, name)}
+              >
+                {busy ? 'Adding…' : matchingLib ? 'Add folder' : 'Add Library'}
+              </button>
             </div>
           </div>
         )}
@@ -327,7 +399,8 @@ export function MediaServerPanel({
         <span className={'conns-state' + (status?.ok ? ' on' : '')}>{status?.ok ? 'Beta' : 'Offline'}</span>
       </div>
       <p className="conns-sub" style={{ marginBottom: 12 }}>
-        Like Plex: one <strong>Movies</strong> library with many folders (T: movies, remote_L, etc.). Same for TV Shows.
+        Pick <strong>Movie</strong> or <strong>TV Show</strong> for how files are scanned. You name each library
+        (Anime, Movies, Kids TV, etc.) and can add more folders to the same name later.
       </p>
 
       {status?.ok && (
@@ -449,11 +522,16 @@ export function MediaServerPanel({
       )}
 
       {wizardOpen && (
-        <AddLibraryWizard onClose={() => setWizardOpen(false)} onDone={afterAddLibrary} />
+        <AddLibraryWizard
+          onClose={() => setWizardOpen(false)}
+          onDone={afterAddLibrary}
+          existingLibraries={libraries}
+        />
       )}
       {addFolderTo && (
         <AddLibraryWizard
           existingLibrary={addFolderTo}
+          existingLibraries={libraries}
           onClose={() => setAddFolderTo(null)}
           onDone={afterAddLibrary}
         />
