@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { browseDir, browseRoots } from './browse.js';
 import { mediaStats } from './db.js';
-import { addLibrary, getLibrary, listLibraries, removeLibrary } from './libraries.js';
+import { addLibrary, getLibrary, listLibraries, removeLibrary, updateLibrary, wipeAllLibraries } from './libraries.js';
 import { listShowEpisodes, listShowSeasons } from './episodes.js';
 import { buildOrbitTreeFromOms } from './importTree.js';
 import { matchAllLibraries, matchLibrary } from './matcher.js';
@@ -135,6 +135,19 @@ export function createMediaRouter() {
     }
   });
 
+  router.post('/libraries/wipe', (req, res) => {
+    if (req.body?.confirm !== true) {
+      res.status(400).json({ error: 'Send { confirm: true } to wipe all media libraries and indexed files.' });
+      return;
+    }
+    try {
+      wipeAllLibraries();
+      res.json({ ok: true, libraries: listLibraries() });
+    } catch (e) {
+      res.status(400).json({ error: e.message || 'Could not wipe media data.' });
+    }
+  });
+
   router.post('/libraries/scan-all', (_req, res) => {
     try {
       const results = scanAllLibraries();
@@ -185,6 +198,18 @@ export function createMediaRouter() {
     const ok = removeLibrary(req.params.id);
     if (!ok) return res.status(404).json({ error: 'Library not found.' });
     res.json({ ok: true });
+  });
+
+  router.patch('/libraries/:id', (req, res) => {
+    const lib = getLibrary(req.params.id);
+    if (!lib) return res.status(404).json({ error: 'Library not found.' });
+    try {
+      const { name, type } = req.body || {};
+      const updated = updateLibrary(req.params.id, { name, type });
+      res.json({ library: updated });
+    } catch (e) {
+      res.status(400).json({ error: e.message || 'Could not update library.' });
+    }
   });
 
   router.get('/libraries/:id', (req, res) => {

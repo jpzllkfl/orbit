@@ -42,7 +42,18 @@ export function allowedRoots() {
   for (const r of envRoots()) add(r);
   for (const lib of listLibraries()) add(lib.rootPath);
 
-  if (fs.existsSync('/media')) add('/media');
+  if (fs.existsSync('/media')) {
+    add('/media');
+    try {
+      for (const entry of fs.readdirSync('/media', { withFileTypes: true })) {
+        if (entry.isDirectory() && !entry.name.startsWith('.')) {
+          add(path.join('/media', entry.name));
+        }
+      }
+    } catch {
+      /* ignore unreadable /media */
+    }
+  }
 
   if (!dockerMode() && process.platform === 'win32') {
     for (const d of windowsDrives()) add(d);

@@ -34,6 +34,15 @@ const insertStmt = () =>
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
 
+/** Movie-style release folder/file (year in name) — skip in TV libraries to avoid fake episode counts. */
+function looksLikeMovieRelease(filePath, fileName) {
+  const parsed = parseMovie(fileName);
+  if (parsed.year) return true;
+  const folder = path.basename(path.dirname(filePath));
+  if (/\(\d{4}\)/.test(folder) || /\[\d{4}\]/.test(folder)) return true;
+  return false;
+}
+
 export function scanLibrary(libraryId, onProgress) {
   const lib = getLibrary(libraryId);
   if (!lib) throw new Error('Library not found.');
@@ -54,6 +63,7 @@ export function scanLibrary(libraryId, onProgress) {
   clear.run(libraryId);
 
   let count = 0;
+  let skippedMovies = 0;
   const now = Date.now();
   const files = [...walkDir(lib.rootPath)];
 
@@ -77,6 +87,10 @@ export function scanLibrary(libraryId, onProgress) {
         type = 'movie';
       } else {
         const ep = parseEpisode(fileName);
+        if (!ep && looksLikeMovieRelease(filePath, fileName)) {
+          skippedMovies++;
+          continue;
+        }
         showTitle = showFromPath(filePath, lib.rootPath);
         if (ep) {
           season = ep.season;
@@ -125,9 +139,13 @@ export function scanLibrary(libraryId, onProgress) {
     throw e;
   }
 
+  const skipNote =
+    skippedMovies > 0
+      ? ` Skipped ${skippedMovies} movie-like file${skippedMovies === 1 ? '' : 's'} (use a Movies library for those).`
+      : '';
   updateLibraryScan(libraryId, {
     status: 'done',
-    message: `Found ${count} video file${count === 1 ? '' : 's'}.`,
+    message: `Found ${count} video file${count === 1 ? '' : 's'}.${skipNote}`,
     itemCount: count,
   });
   onProgress?.({ phase: 'done', message: `Scan complete — ${count} items.`, count });

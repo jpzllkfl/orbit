@@ -1,17 +1,24 @@
 import fs from 'fs';
 import { DEFAULT_OMS_LIBRARIES } from './catalog.js';
-import { addLibrary, listLibraries } from './libraries.js';
+import { addLibrary, listLibraries, updateLibrary } from './libraries.js';
 import { scanLibrary } from './scanner.js';
 
-export function seedDefaultLibraries() {
+/** Add missing catalog libraries and fix name/type on existing mounts. */
+export function syncCatalogLibraries() {
   const added = [];
+  const updated = [];
   const skipped = [];
   const missing = [];
 
   for (const def of DEFAULT_OMS_LIBRARIES) {
-    const libs = listLibraries();
-    if (libs.some((l) => l.rootPath === def.mount)) {
-      skipped.push(def);
+    const existing = listLibraries().find((l) => l.rootPath === def.mount);
+    if (existing) {
+      if (existing.name !== def.name || existing.type !== def.type) {
+        updateLibrary(existing.id, { name: def.name, type: def.type });
+        updated.push({ ...def, id: existing.id, was: { name: existing.name, type: existing.type } });
+      } else {
+        skipped.push(def);
+      }
       continue;
     }
     if (!fs.existsSync(def.mount)) {
@@ -26,7 +33,11 @@ export function seedDefaultLibraries() {
     }
   }
 
-  return { added, skipped, missing, total: DEFAULT_OMS_LIBRARIES.length };
+  return { added, updated, missing, skipped, total: DEFAULT_OMS_LIBRARIES.length, libraries: listLibraries() };
+}
+
+export function seedDefaultLibraries() {
+  return syncCatalogLibraries();
 }
 
 export function scanAllLibraries(onProgress) {
@@ -51,5 +62,5 @@ export function maybeAutoSeedOnBoot() {
   if (process.env.ORBIT_OMS_AUTO_SEED === '0') return null;
   const libs = listLibraries();
   if (libs.length > 0) return null;
-  return seedDefaultLibraries();
+  return syncCatalogLibraries();
 }

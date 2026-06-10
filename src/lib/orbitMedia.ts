@@ -58,9 +58,25 @@ export const OrbitMedia = {
     return api('/import-tree');
   },
 
+  async updateLibrary(id: string, opts: { name?: string; type?: 'movie' | 'tv' }): Promise<MediaLibrary> {
+    const { library } = await api<{ library: MediaLibrary }>('/libraries/' + encodeURIComponent(id), {
+      method: 'PATCH',
+      body: JSON.stringify(opts),
+    });
+    return library;
+  },
+
+  async wipeLibraries(): Promise<{ ok: boolean; libraries: MediaLibrary[] }> {
+    return api('/libraries/wipe', {
+      method: 'POST',
+      body: JSON.stringify({ confirm: true }),
+    });
+  },
+
   async seedLibraries(): Promise<{
     ok: boolean;
     added: unknown[];
+    updated: unknown[];
     missing: unknown[];
     libraries: MediaLibrary[];
   }> {

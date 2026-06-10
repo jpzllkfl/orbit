@@ -4,7 +4,7 @@
  * Container paths are what you enter in Orbit UI and what docker-compose mounts.
  */
 export const DEFAULT_OMS_LIBRARIES = [
-  { name: 'Anime', type: 'movie', hostDir: 'Anime', mount: '/media/anime' },
+  { name: 'Anime', type: 'tv', hostDir: 'Anime', mount: '/media/anime' },
   { name: 'Comedy', type: 'movie', hostDir: 'Comedy', mount: '/media/comedy' },
   { name: 'Documentaries', type: 'movie', hostDir: 'Documentaries', mount: '/media/documentaries' },
   { name: 'Kids Movies', type: 'movie', hostDir: 'Kids Movies', mount: '/media/kids-movies' },

@@ -68,6 +68,27 @@ export function removeLibrary(id) {
   return true;
 }
 
+/** Delete all libraries and indexed media items (fresh start). */
+export function wipeAllLibraries() {
+  const d = getDb();
+  d.exec('DELETE FROM media_items');
+  d.exec('DELETE FROM libraries');
+  return { ok: true };
+}
+
+export function updateLibrary(id, { name, type }) {
+  const lib = getLibrary(id);
+  if (!lib) throw new Error('Library not found.');
+  const trimmedName = name != null ? String(name).trim() : lib.name;
+  const nextType = type != null ? type : lib.type;
+  if (!trimmedName) throw new Error('Library name is required.');
+  if (nextType !== 'movie' && nextType !== 'tv') throw new Error('Library type must be movie or tv.');
+  getDb()
+    .prepare(`UPDATE libraries SET name = ?, type = ?, updated_at = ? WHERE id = ?`)
+    .run(trimmedName, nextType, Date.now(), id);
+  return getLibrary(id);
+}
+
 export function updateLibraryScan(id, { status, message, itemCount }) {
   const now = Date.now();
   getDb()

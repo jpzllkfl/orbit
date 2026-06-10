@@ -1,319 +1,494 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Lib } from '../lib';
-import { fetchOmsTree, mergeOmsIntoTree } from '../lib/importLibraryFromOms';
-import { syncOmsAfterChange } from '../lib/omsSync';
-import { isUsingRemoteHome } from '../lib/orbitServer';
-import { OrbitMedia } from '../lib/orbitMedia';
-import type { MediaLibrary, MediaServerStatus } from '../types/media';
-import type { OrbitNode } from '../types/orbit';
-import { FolderBrowserModal } from './FolderBrowserModal';
-import { Icons } from './icons';
-
-const ic = { ...Icons, refresh: Icons.spark };
-
-function canNativeFolderPick() {
-  return typeof window !== 'undefined' && typeof window.orbitNative?.pickFolder === 'function';
-}
-
-export function MediaServerPanel({
-  tree,
-  onImported,
-}: {
-  tree: OrbitNode;
-  onImported?: (merged: OrbitNode) => void;
-}) {
-  const [status, setStatus] = useState<MediaServerStatus | null>(null);
-  const [libraries, setLibraries] = useState<MediaLibrary[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [scanningId, setScanningId] = useState<string | null>(null);
-  const [error, setError] = useState('');
-  const [name, setName] = useState('');
-  const [type, setType] = useState<'movie' | 'tv'>('movie');
-  const [rootPath, setRootPath] = useState('/media/movies');
-  const [browseOpen, setBrowseOpen] = useState(false);
-  const [importMsg, setImportMsg] = useState('');
-
-  const reload = useCallback(async () => {
-    try {
-      const [st, libs] = await Promise.all([OrbitMedia.status(), OrbitMedia.listLibraries()]);
-      setStatus(st);
-      setLibraries(libs);
-      setError('');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Orbit Media Server unavailable');
-    }
-  }, []);
-
-  useEffect(() => {
-    reload();
-  }, [reload]);
-
-  async function addLibrary() {
-    setBusy(true);
-    setError('');
-    try {
-      await OrbitMedia.addLibrary({ name: name.trim() || (type === 'movie' ? 'Movies' : 'TV Shows'), type, rootPath: rootPath.trim() });
-      setName('');
-      await reload();
-      await syncOmsAfterChange();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not add library');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function removeLibrary(id: string) {
-    if (!confirm('Remove this library from Orbit? Scanned items will be deleted.')) return;
-    setBusy(true);
-    try {
-      await OrbitMedia.removeLibrary(id);
-      await reload();
-      await syncOmsAfterChange();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not remove library');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function scanLibrary(id: string) {
-    setScanningId(id);
-    setError('');
-    try {
-      await OrbitMedia.scanLibrary(id);
-      await reload();
-      await syncOmsAfterChange();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Scan failed');
-    } finally {
-      setScanningId(null);
-    }
-  }
-
-  async function setupTrueNasLibraries() {
-    setBusy(true);
-    setError('');
-    setImportMsg('Adding TrueNAS library paths…');
-    try {
-      const seed = await OrbitMedia.seedLibraries();
-      const added = seed.added?.length ?? 0;
-      const missing = seed.missing?.length ?? 0;
-      if (missing > 0) {
-        setImportMsg(
-          `Added ${added} libraries. ${missing} folders not mounted in Docker — update Dockge compose volumes and redeploy.`,
-        );
-      } else {
-        setImportMsg(`Added ${added} libraries. Scanning all folders…`);
-      }
-      await reload();
-      if (added > 0 || (seed.libraries?.length ?? 0) > 0) {
-        setImportMsg('Scanning all libraries (this may take a while)…');
-        await OrbitMedia.scanAllLibraries();
-        await reload();
-        const result = await fetchOmsTree();
-        if (result.tree) {
-          const merged = mergeOmsIntoTree(tree, result.tree);
-          onImported?.(merged);
-          setImportMsg(
-            `Direct play ready — ${result.libraryCount ?? 0} libraries, ${result.titleCount ?? 0} titles indexed and imported.`,
-          );
-        }
-      }
-      await syncOmsAfterChange();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Setup failed');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function matchTmdb() {
-    if (!Lib.connected) {
-      setError('TMDB is not available on this Orbit server. Set ORBIT_TMDB_API_KEY in Docker.');
-      return;
-    }
-    setBusy(true);
-    setError('');
-    setImportMsg('');
-    try {
-      const result = await OrbitMedia.matchTmdb(Lib.key || undefined);
-      setImportMsg(`TMDB matched ${result.matched} title${result.matched === 1 ? '' : 's'}. Re-import to refresh artwork.`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'TMDB match failed');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function importToOrbit() {
-    setBusy(true);
-    setError('');
-    setImportMsg('');
-    try {
-      const result = await fetchOmsTree();
-      if (!result.tree) throw new Error(result.error || 'Nothing to import');
-      const merged = mergeOmsIntoTree(tree, result.tree);
-      onImported?.(merged);
-      setImportMsg(
-        `Added ${result.libraryCount ?? 0} librar${result.libraryCount === 1 ? 'y' : 'ies'} · ${result.titleCount ?? 0} titles to Orbit.`,
-      );
-      await syncOmsAfterChange();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Import failed');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function pickFolder() {
-    if (!isUsingRemoteHome() && canNativeFolderPick()) {
-      try {
-        const picked = await window.orbitNative!.pickFolder!();
-        if (picked) {
-          setRootPath(picked);
-          if (!name.trim()) {
-            const leaf = picked.replace(/[/\\]+$/, '').split(/[/\\]/).pop();
-            if (leaf) setName(leaf);
-          }
-        }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Could not open folder picker');
-      }
-      return;
-    }
-    setBrowseOpen(true);
-  }
-
-  return (
-    <div className="conns-card wide oms-card">
-      <div className="conns-card-h">
-        <span className="conns-pill oms">{ic.orbit({})}Orbit Media Server</span>
-        <span className={'conns-state' + (status?.ok ? ' on' : '')}>{status?.ok ? 'Beta' : 'Offline'}</span>
-      </div>
-      <p className="conns-p">
-        Direct play from your TrueNAS media share — no Plex required. One-click setup adds Anime, Comedy, Movies, TV,
-        remote drives, and the rest. Plex can stay connected as a fallback only.
-      </p>
-      {status?.ok && (
-        <div style={{ marginBottom: 14 }}>
-          <button type="button" className="conns-btn primary oms-browse-btn" disabled={busy} onClick={setupTrueNasLibraries}>
-            {ic.orbit({})} Set up TrueNAS direct play (all libraries)
-          </button>
-        </div>
-      )}
-      {status?.ok && (
-        <div className="oms-import-bar" style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-          <p className="conns-sub" style={{ margin: 0, flex: 1 }}>
-            {status.libraries} librar{status.libraries === 1 ? 'y' : 'ies'} · {status.items.toLocaleString()} indexed file
-            {status.items === 1 ? '' : 's'}
-          </p>
-          {status.items > 0 && (
-            <>
-              <button type="button" className="conns-btn sm" disabled={busy} onClick={matchTmdb}>
-                {ic.image({})} Match TMDB
-              </button>
-              <button type="button" className="conns-btn primary sm" disabled={busy} onClick={importToOrbit}>
-                {ic.spark({})} Import to Orbit library
-              </button>
-            </>
-          )}
-        </div>
-      )}
-      {importMsg && <p className="conns-sub" style={{ color: 'var(--cool)', marginBottom: 12 }}>{importMsg}</p>}
-
-      <div className="oms-add">
-        <div className="oms-row">
-          <label>
-            Name
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Movies" />
-          </label>
-          <label>
-            Type
-            <select value={type} onChange={(e) => setType(e.target.value as 'movie' | 'tv')}>
-              <option value="movie">Movies</option>
-              <option value="tv">TV Shows</option>
-            </select>
-          </label>
-        </div>
-        <label className="oms-path">
-          Folder path
-          <input
-            value={rootPath}
-            onChange={(e) => setRootPath(e.target.value)}
-            placeholder="/media/movies"
-            spellCheck={false}
-          />
-        </label>
-        <div className="oms-add-actions">
-          <button type="button" className="conns-btn primary oms-browse-btn" onClick={pickFolder}>
-            {ic.folder({})} Browse for folder…
-          </button>
-          <button className="conns-btn oms-add-btn" disabled={busy || !rootPath.trim()} onClick={addLibrary}>
-            {ic.plus({})}Add library
-          </button>
-        </div>
-        <p className="conns-sub oms-hint">
-          Library paths sync to your Orbit account — same folders on web and desktop. Use paths on your{' '}
-          <strong>home server</strong> (e.g. <code>/media/movies</code> on TrueNAS). Mount folders in Dockge compose
-          first.
-        </p>
-      </div>
-
-      {browseOpen && (
-        <FolderBrowserModal
-          onClose={() => setBrowseOpen(false)}
-          onSelect={(p) => {
-            setRootPath(p);
-            setBrowseOpen(false);
-            if (!name.trim()) {
-              const leaf = p.replace(/[/\\]+$/, '').split(/[/\\]/).pop();
-              if (leaf) setName(leaf);
-            }
-          }}
-        />
-      )}
-
-      {error && <p className="conns-err">{error}</p>}
-
-      {libraries.length > 0 && (
-        <div className="oms-libs">
-          {libraries.map((lib) => (
-            <div key={lib.id} className={'oms-lib' + (lib.pathExists ? '' : ' missing')}>
-              <div className="oms-lib-main">
-                <span className="oms-lib-type">{lib.type === 'movie' ? 'Movies' : 'TV'}</span>
-                <span className="oms-lib-name">{lib.name}</span>
-                <span className="oms-lib-path" title={lib.rootPath}>
-                  {lib.rootPath}
-                </span>
-              </div>
-              <div className="oms-lib-meta">
-                <span>{lib.itemCount} items</span>
-                {lib.lastScanMessage && <span title={lib.lastScanStatus || ''}>{lib.lastScanMessage}</span>}
-                {!lib.pathExists && <span className="oms-warn">Path not found</span>}
-              </div>
-              <div className="oms-lib-actions">
-                <button
-                  className="conns-btn sm"
-                  disabled={!!scanningId || !lib.pathExists}
-                  onClick={() => scanLibrary(lib.id)}
-                >
-                  {scanningId === lib.id ? (
-                    'Scanning…'
-                  ) : (
-                    <>
-                      {ic.refresh({})} Scan
-                    </>
-                  )}
-                </button>
-                <button className="conns-btn danger sm" disabled={busy} onClick={() => removeLibrary(lib.id)}>
-                  {ic.x({})}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+import { useCallback, useEffect, useState } from 'react';
+import { Lib } from '../lib';
+import { fetchOmsTree, mergeOmsIntoTree } from '../lib/importLibraryFromOms';
+import { syncOmsAfterChange } from '../lib/omsSync';
+import { isUsingRemoteHome } from '../lib/orbitServer';
+import { OrbitMedia } from '../lib/orbitMedia';
+import type { MediaLibrary, MediaServerStatus } from '../types/media';
+import type { OrbitNode } from '../types/orbit';
+import { FolderBrowserModal } from './FolderBrowserModal';
+import { Icons } from './icons';
+
+const ic = { ...Icons, refresh: Icons.spark };
+
+function canNativeFolderPick() {
+  return typeof window !== 'undefined' && typeof window.orbitNative?.pickFolder === 'function';
+}
+
+function folderLeafName(p: string) {
+  return p.replace(/[/\\]+$/, '').split(/[/\\]/).pop() || '';
+}
+
+type WizardStep = 'type' | 'folder' | 'name';
+
+function AddLibraryWizard({
+  onClose,
+  onAdded,
+}: {
+  onClose: () => void;
+  onAdded: () => Promise<void>;
+}) {
+  const [step, setStep] = useState<WizardStep>('type');
+  const [type, setType] = useState<'movie' | 'tv'>('movie');
+  const [rootPath, setRootPath] = useState('');
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function submit() {
+    if (!rootPath.trim()) return;
+    setBusy(true);
+    setError('');
+    try {
+      const defaultName = type === 'movie' ? 'Movies' : 'TV Shows';
+      await OrbitMedia.addLibrary({
+        name: name.trim() || folderLeafName(rootPath) || defaultName,
+        type,
+        rootPath: rootPath.trim(),
+      });
+      await onAdded();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not add library');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function pickNativeFolder() {
+    if (!canNativeFolderPick()) return;
+    try {
+      const picked = await window.orbitNative!.pickFolder!();
+      if (picked) {
+        setRootPath(picked);
+        if (!name.trim()) setName(folderLeafName(picked));
+        setStep('name');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not open folder picker');
+    }
+  }
+
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <div className="modal oms-wizard-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="oms-wizard-head">
+          <h3>Add Library</h3>
+          <button type="button" className="oms-wizard-close" onClick={onClose} aria-label="Close">
+            {ic.x({})}
+          </button>
+        </div>
+
+        {step === 'type' && (
+          <div className="oms-wizard-step">
+            <p className="oms-wizard-lead">Select library type</p>
+            <div className="oms-type-cards">
+              <button
+                type="button"
+                className={'oms-type-card' + (type === 'movie' ? ' selected' : '')}
+                onClick={() => setType('movie')}
+              >
+                <span className="oms-type-card-ic">{ic.film({})}</span>
+                <span className="oms-type-card-title">Movies</span>
+                <span className="oms-type-card-sub">Movie files in folders</span>
+              </button>
+              <button
+                type="button"
+                className={'oms-type-card' + (type === 'tv' ? ' selected' : '')}
+                onClick={() => setType('tv')}
+              >
+                <span className="oms-type-card-ic">{ic.tv({})}</span>
+                <span className="oms-type-card-title">TV Shows</span>
+                <span className="oms-type-card-sub">Show folders with seasons</span>
+              </button>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="btn ghost" onClick={onClose}>
+                Cancel
+              </button>
+              <button type="button" className="btn primary" onClick={() => setStep('folder')}>
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 'folder' && (
+          <div className="oms-wizard-step">
+            <p className="oms-wizard-lead">
+              Add folders for your {type === 'movie' ? 'Movies' : 'TV Shows'} library
+            </p>
+            {!isUsingRemoteHome() && canNativeFolderPick() && (
+              <button type="button" className="conns-btn sm oms-native-pick" onClick={pickNativeFolder}>
+                {ic.folder({})} Pick folder on this PC
+              </button>
+            )}
+            <FolderBrowserModal
+              embedded
+              onClose={() => setStep('type')}
+              onSelect={(p) => {
+                setRootPath(p);
+                if (!name.trim()) setName(folderLeafName(p));
+                setStep('name');
+              }}
+            />
+            <div className="modal-actions">
+              <button type="button" className="btn ghost" onClick={() => setStep('type')}>
+                Back
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 'name' && (
+          <div className="oms-wizard-step">
+            <p className="oms-wizard-lead">Name your library</p>
+            <label className="oms-wizard-name-field">
+              Library name
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={type === 'movie' ? 'Movies' : 'TV Shows'}
+                autoFocus
+              />
+            </label>
+            <p className="conns-sub oms-wizard-path">
+              Folder: <code>{rootPath}</code>
+            </p>
+            {error && <p className="conns-err">{error}</p>}
+            <div className="modal-actions">
+              <button type="button" className="btn ghost" onClick={() => setStep('folder')} disabled={busy}>
+                Back
+              </button>
+              <button type="button" className="btn primary" disabled={busy || !rootPath.trim()} onClick={submit}>
+                {busy ? 'Adding…' : 'Add Library'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function MediaServerPanel({
+  tree,
+  onImported,
+}: {
+  tree: OrbitNode;
+  onImported?: (merged: OrbitNode) => void;
+}) {
+  const [status, setStatus] = useState<MediaServerStatus | null>(null);
+  const [libraries, setLibraries] = useState<MediaLibrary[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [scanningId, setScanningId] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [importMsg, setImportMsg] = useState('');
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+
+  const reload = useCallback(async () => {
+    try {
+      const [st, libs] = await Promise.all([OrbitMedia.status(), OrbitMedia.listLibraries()]);
+      setStatus(st);
+      setLibraries(libs);
+      setError('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Orbit Media Server unavailable');
+    }
+  }, []);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  async function afterLibraryChange() {
+    await reload();
+    await syncOmsAfterChange();
+  }
+
+  async function removeLibrary(id: string) {
+    if (!confirm('Remove this library? Scanned items will be deleted.')) return;
+    setBusy(true);
+    try {
+      await OrbitMedia.removeLibrary(id);
+      await afterLibraryChange();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not remove library');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function scanLibrary(id: string) {
+    setScanningId(id);
+    setError('');
+    try {
+      await OrbitMedia.scanLibrary(id);
+      await afterLibraryChange();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Scan failed');
+    } finally {
+      setScanningId(null);
+    }
+  }
+
+  async function scanAllLibraries() {
+    setBusy(true);
+    setError('');
+    setImportMsg('');
+    try {
+      await OrbitMedia.scanAllLibraries();
+      await afterLibraryChange();
+      setImportMsg('Scan complete. Import to Orbit library to refresh your home rows.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Scan failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changeLibraryType(id: string, newType: 'movie' | 'tv') {
+    const lib = libraries.find((l) => l.id === id);
+    if (!lib || lib.type === newType) return;
+    if (
+      !confirm(
+        `Change "${lib.name}" to ${newType === 'movie' ? 'Movies' : 'TV Shows'} and rescan?`,
+      )
+    ) {
+      await reload();
+      return;
+    }
+    setScanningId(id);
+    setError('');
+    try {
+      await OrbitMedia.updateLibrary(id, { type: newType });
+      await OrbitMedia.scanLibrary(id);
+      await afterLibraryChange();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not update library type');
+      await reload();
+    } finally {
+      setScanningId(null);
+    }
+  }
+
+  async function wipeAllLibraries() {
+    if (
+      !confirm(
+        'Delete ALL Orbit Media Server libraries and indexed files? This cannot be undone. Your actual video files on disk are not deleted.',
+      )
+    ) {
+      return;
+    }
+    if (!confirm('Really wipe everything and start fresh?')) return;
+    setBusy(true);
+    setError('');
+    setImportMsg('');
+    try {
+      await OrbitMedia.wipeLibraries();
+      await afterLibraryChange();
+      setImportMsg('All media libraries cleared. Add libraries to get started.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Wipe failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setupTrueNasLibraries() {
+    setBusy(true);
+    setError('');
+    setImportMsg('Syncing default TrueNAS paths…');
+    try {
+      const seed = await OrbitMedia.seedLibraries();
+      const added = seed.added?.length ?? 0;
+      const updated = seed.updated?.length ?? 0;
+      setImportMsg(`Synced: ${added} added, ${updated} updated.`);
+      await afterLibraryChange();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Setup failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function matchTmdb() {
+    if (!Lib.connected) {
+      setError('TMDB is not available on this Orbit server. Set ORBIT_TMDB_API_KEY in Docker.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setImportMsg('');
+    try {
+      const result = await OrbitMedia.matchTmdb(Lib.key || undefined);
+      setImportMsg(`TMDB matched ${result.matched} title${result.matched === 1 ? '' : 's'}. Re-import to refresh artwork.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'TMDB match failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function importToOrbit() {
+    setBusy(true);
+    setError('');
+    setImportMsg('');
+    try {
+      const result = await fetchOmsTree();
+      if (!result.tree) throw new Error(result.error || 'Nothing to import');
+      const merged = mergeOmsIntoTree(tree, result.tree);
+      onImported?.(merged);
+      setImportMsg(
+        `Added ${result.libraryCount ?? 0} librar${result.libraryCount === 1 ? 'y' : 'ies'} · ${result.titleCount ?? 0} titles to Orbit.`,
+      );
+      await syncOmsAfterChange();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Import failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="conns-card wide oms-card">
+      <div className="conns-card-h">
+        <span className="conns-pill oms">{ic.orbit({})}Orbit Media Server</span>
+        <span className={'conns-state' + (status?.ok ? ' on' : '')}>{status?.ok ? 'Beta' : 'Offline'}</span>
+      </div>
+
+      {status?.ok && (
+        <>
+          <div className="oms-toolbar">
+            <button
+              type="button"
+              className="conns-btn primary"
+              disabled={busy}
+              onClick={() => setWizardOpen(true)}
+            >
+              {ic.plus({})} Add Library
+            </button>
+            <button
+              type="button"
+              className="conns-btn"
+              disabled={busy || libraries.length === 0}
+              onClick={scanAllLibraries}
+            >
+              {ic.refresh({})} Scan Library Files
+            </button>
+          </div>
+
+          {status.libraries > 0 && (
+            <p className="conns-sub oms-stats">
+              {status.libraries} librar{status.libraries === 1 ? 'y' : 'ies'} · {status.items.toLocaleString()} indexed
+              file{status.items === 1 ? '' : 's'}
+            </p>
+          )}
+        </>
+      )}
+
+      {importMsg && <p className="conns-sub oms-msg">{importMsg}</p>}
+      {error && <p className="conns-err">{error}</p>}
+
+      {libraries.length === 0 && status?.ok ? (
+        <div className="oms-empty">
+          <p>No libraries yet.</p>
+          <button type="button" className="conns-btn primary" disabled={busy} onClick={() => setWizardOpen(true)}>
+            {ic.plus({})} Add Library
+          </button>
+        </div>
+      ) : (
+        libraries.length > 0 && (
+          <div className="oms-lib-list">
+            {libraries.map((lib) => (
+              <div key={lib.id} className={'oms-lib-row' + (lib.pathExists ? '' : ' missing')}>
+                <span className="oms-lib-row-ic" title={lib.type === 'movie' ? 'Movies' : 'TV Shows'}>
+                  {lib.type === 'movie' ? ic.film({}) : ic.tv({})}
+                </span>
+                <div className="oms-lib-row-body">
+                  <div className="oms-lib-row-top">
+                    <span className="oms-lib-row-name">{lib.name}</span>
+                    <select
+                      className="oms-lib-row-type"
+                      value={lib.type}
+                      disabled={!!scanningId || busy}
+                      onChange={(e) => changeLibraryType(lib.id, e.target.value as 'movie' | 'tv')}
+                      aria-label={`${lib.name} library type`}
+                    >
+                      <option value="movie">Movies</option>
+                      <option value="tv">TV Shows</option>
+                    </select>
+                  </div>
+                  <span className="oms-lib-row-path" title={lib.rootPath}>
+                    {lib.rootPath}
+                  </span>
+                  <span className="oms-lib-row-meta">
+                    {lib.itemCount} items
+                    {!lib.pathExists && <span className="oms-warn"> · Path not found</span>}
+                    {lib.lastScanMessage && <span> · {lib.lastScanMessage}</span>}
+                  </span>
+                </div>
+                <div className="oms-lib-row-actions">
+                  <button
+                    type="button"
+                    className="conns-btn sm"
+                    disabled={!!scanningId || !lib.pathExists}
+                    onClick={() => scanLibrary(lib.id)}
+                  >
+                    {scanningId === lib.id ? 'Scanning…' : 'Scan'}
+                  </button>
+                  <button
+                    type="button"
+                    className="conns-btn danger sm"
+                    disabled={busy}
+                    onClick={() => removeLibrary(lib.id)}
+                    aria-label={`Remove ${lib.name}`}
+                  >
+                    {ic.x({})}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      )}
+
+      {status?.ok && status.items > 0 && (
+        <div className="oms-import-bar">
+          <button type="button" className="conns-btn sm" disabled={busy} onClick={matchTmdb}>
+            {ic.image({})} Match TMDB
+          </button>
+          <button type="button" className="conns-btn primary sm" disabled={busy} onClick={importToOrbit}>
+            {ic.spark({})} Import to Orbit library
+          </button>
+        </div>
+      )}
+
+      {status?.ok && (
+        <details className="oms-advanced" open={advancedOpen} onToggle={(e) => setAdvancedOpen(e.currentTarget.open)}>
+          <summary>Advanced</summary>
+          <div className="oms-advanced-body">
+            <p className="conns-sub">
+              Auto-add TrueNAS mount paths from server config. Use only if you want bulk setup instead of adding folders
+              manually.
+            </p>
+            <button type="button" className="conns-btn sm" disabled={busy} onClick={setupTrueNasLibraries}>
+              Sync TrueNAS library paths
+            </button>
+            <button type="button" className="conns-btn danger sm" disabled={busy} onClick={wipeAllLibraries}>
+              Wipe all media data
+            </button>
+          </div>
+        </details>
+      )}
+
+      {wizardOpen && (
+        <AddLibraryWizard
+          onClose={() => setWizardOpen(false)}
+          onAdded={afterLibraryChange}
+        />
+      )}
+    </div>
+  );
+}
