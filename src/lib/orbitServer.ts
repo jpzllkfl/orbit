@@ -86,11 +86,33 @@ export function getOmsPlaybackOrigin(): string {
   }
   try {
     const remote = localStorage.getItem(DESKTOP_MEDIA_LS);
-    if (remote) return normalizeOrigin(remote);
+    if (remote && canUseDesktopMediaUrl(normalizeOrigin(remote))) {
+      return normalizeOrigin(remote);
+    }
   } catch {
     /* ignore */
   }
   return getAuthServer();
+}
+
+/** OMS library management (Connections panel) — always the page's Orbit server on web. */
+export function getOmsManagementServer(): string {
+  if (isDesktopApp() && typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  if (typeof window !== 'undefined' && window.location.origin) {
+    return window.location.origin;
+  }
+  return getAuthServer();
+}
+
+/** Browsers block https://orbit.broken-eye.com → http://192.168.x.x (mixed content + CORS). */
+function canUseDesktopMediaUrl(url: string): boolean {
+  if (typeof window === 'undefined' || !url) return false;
+  const page = window.location.origin;
+  if (page.startsWith('https://') && url.startsWith('http://')) return false;
+  if (isPrivateHost(url) && !isPrivateHost(page)) return false;
+  return true;
 }
 
 export function getHomeServer(): string {

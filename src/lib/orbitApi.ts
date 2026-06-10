@@ -1,4 +1,4 @@
-import { authApiUrl, mediaApiUrl } from './orbitServer';
+import { authApiUrl, mediaApiUrl, getOmsManagementServer } from './orbitServer';
 
 function authToken(): string | null {
   try {
@@ -21,7 +21,7 @@ export async function orbitApiFetch(path: string, init: RequestInit = {}): Promi
   return fetch(authApiUrl(path), { ...init, headers });
 }
 
-/** Fetch Orbit Media Server API (local on desktop, cloud on web). */
+/** Fetch Orbit Media Server API (local on desktop, same-site on web). */
 export async function orbitMediaFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const headers: Record<string, string> = {
     ...(init.headers as Record<string, string>),
@@ -31,5 +31,7 @@ export async function orbitMediaFetch(path: string, init: RequestInit = {}): Pro
   if (init.body && !headers['Content-Type'] && !headers['content-type']) {
     headers['Content-Type'] = 'application/json';
   }
-  return fetch(mediaApiUrl(path), { ...init, headers });
+  const base = getOmsManagementServer();
+  const p = path.startsWith('/') ? path : '/' + path;
+  return fetch(base + p, { ...init, headers });
 }
