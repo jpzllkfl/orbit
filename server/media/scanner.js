@@ -2,7 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import { getDb } from './db.js';
 import { getLibrary, getLibraryFolders, updateLibraryScan } from './libraries.js';
+import { matchLibrary } from './matcher.js';
 import { isVideoFile, parseMovie, parseEpisode, showFromPath } from './naming.js';
+import { getDefaultTmdbKey, isTmdbConfigured } from '../tmdb-config.js';
 
 function newItemId() {
   return 'mi_' + Math.random().toString(36).slice(2, 11);
@@ -107,7 +109,7 @@ function scanFiles(lib, rootPath, files, insert, now) {
   return { count, skippedMovies };
 }
 
-export function scanLibrary(libraryId, onProgress) {
+export async function scanLibrary(libraryId, onProgress) {
   const lib = getLibrary(libraryId);
   if (!lib) throw new Error('Library not found.');
   const folders = getLibraryFolders(libraryId).filter((f) => f.pathExists && f.readable);
@@ -157,6 +159,17 @@ export function scanLibrary(libraryId, onProgress) {
     itemCount: totalCount,
   });
   onProgress?.({ phase: 'done', message: `Scan complete — ${totalCount} items.`, count: totalCount });
+
+  if (isTmdbConfigured() && totalCount > 0) {
+    onProgress?.({ phase: 'match', message: 'Matching TMDB posters and titles…' });
+    try {
+      await matchLibrary(libraryId, getDefaultTmdbKey(), (ev) =>
+        onProgress?.({ phase: 'match', message: ev.message || 'Matching TMDB…' }),
+      );
+    } catch {
+      /* TMDB offline — scan still succeeded */
+    }
+  }
 
   return { itemCount: totalCount, libraryId };
 }

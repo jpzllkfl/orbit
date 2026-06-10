@@ -148,16 +148,16 @@ export function createMediaRouter() {
     }
   });
 
-  router.post('/libraries/scan-all', (_req, res) => {
+  router.post('/libraries/scan-all', async (_req, res) => {
     try {
-      const results = scanAllLibraries();
+      const results = await scanAllLibraries();
       res.json({ ok: true, results, libraries: listLibraries() });
     } catch (e) {
       res.status(400).json({ error: e.message || 'Scan all failed.' });
     }
   });
 
-  router.get('/libraries/scan-all/stream', (req, res) => {
+  router.get('/libraries/scan-all/stream', async (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -168,7 +168,7 @@ export function createMediaRouter() {
     };
 
     try {
-      const results = scanAllLibraries((ev) => send({ type: 'progress', ...ev }));
+      const results = await scanAllLibraries((ev) => send({ type: 'progress', ...ev }));
       send({ type: 'done', results, libraries: listLibraries() });
     } catch (e) {
       send({ type: 'error', error: e.message || 'Scan all failed.' });
@@ -252,11 +252,11 @@ export function createMediaRouter() {
     res.json({ items: listItems(req.params.id, limit) });
   });
 
-  router.post('/libraries/:id/scan', (req, res) => {
+  router.post('/libraries/:id/scan', async (req, res) => {
     const lib = getLibrary(req.params.id);
     if (!lib) return res.status(404).json({ error: 'Library not found.' });
     try {
-      const result = scanLibrary(req.params.id);
+      const result = await scanLibrary(req.params.id);
       res.json({ ok: true, ...result, library: getLibrary(req.params.id) });
     } catch (e) {
       res.status(400).json({ error: e.message || 'Scan failed.' });
@@ -264,7 +264,7 @@ export function createMediaRouter() {
   });
 
   /** SSE scan progress for large libraries. */
-  router.get('/libraries/:id/scan/stream', (req, res) => {
+  router.get('/libraries/:id/scan/stream', async (req, res) => {
     const lib = getLibrary(req.params.id);
     if (!lib) return res.status(404).json({ error: 'Library not found.' });
 
@@ -278,7 +278,7 @@ export function createMediaRouter() {
     };
 
     try {
-      const result = scanLibrary(req.params.id, (ev) => send({ type: 'progress', ...ev }));
+      const result = await scanLibrary(req.params.id, (ev) => send({ type: 'progress', ...ev }));
       send({ type: 'done', ...result, library: getLibrary(req.params.id) });
     } catch (e) {
       send({ type: 'error', error: e.message || 'Scan failed.' });

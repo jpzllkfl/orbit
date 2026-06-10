@@ -15,13 +15,23 @@ function baseName(fileName) {
   return n;
 }
 
+const RELEASE_NOISE =
+  /\b(2160p|1080p|720p|480p|4320p|4k|uhd|hdr10\+?|hdr|dv|web-?dl|webrip|bluray|blu-?ray|bdrip|brrip|hdtv|remux|x264|x265|hevc|h\.?264|h\.?265|aac|dts|truehd|atmos|amzn|nf|dsnp|hmax|proper|repack|extended|unrated|multi|10bit|8bit)\b/gi;
+
+function cleanReleaseTitle(s) {
+  return (s || '')
+    .replace(RELEASE_NOISE, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export function parseMovie(fileName) {
   const raw = baseName(fileName);
-  const m = raw.match(/^(.+?)\s*[\[(](\d{4})[\])]\s*$/);
-  if (m) return { title: m[1].trim(), year: Number(m[2]) };
-  const m2 = raw.match(/^(.+?)\s+(\d{4})\s*$/);
-  if (m2) return { title: m2[1].trim(), year: Number(m2[2]) };
-  return { title: raw, year: null };
+  const m = raw.match(/^(.+?)\s*[\[(](\d{4})[\])]\s*/);
+  if (m) return { title: cleanReleaseTitle(m[1]), year: Number(m[2]) };
+  const m2 = raw.match(/^(.+?)\s+(19\d{2}|20\d{2})(?:\s|$)/);
+  if (m2) return { title: cleanReleaseTitle(m2[1]), year: Number(m2[2]) };
+  return { title: cleanReleaseTitle(raw), year: null };
 }
 
 export function parseEpisode(fileName) {

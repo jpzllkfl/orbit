@@ -1,6 +1,8 @@
-/** Shared TMDB credentials — set ORBIT_TMDB_API_KEY on the Orbit server (Docker env). */
+/** Orbit ships with TMDB enabled — override with ORBIT_TMDB_API_KEY if needed. */
+const BUILTIN_TMDB_KEY = 'b379792391747f1606e1d7a933dd2aea';
+
 export function getDefaultTmdbKey() {
-  return (process.env.ORBIT_TMDB_API_KEY || '').trim();
+  return (process.env.ORBIT_TMDB_API_KEY || BUILTIN_TMDB_KEY).trim();
 }
 
 export function isTmdbConfigured() {

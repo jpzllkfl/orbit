@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Lib } from '../lib';
+import { apiUrl } from '../lib/orbitServer';
 import { deleteOrbitLibrary } from '../lib/deleteOrbitLibrary';
 import {
   fetchOmsTree,
@@ -299,16 +300,46 @@ export function MediaServerPanel({
     await syncOmsAfterChange();
   }
 
+  async function tmdbReady() {
+    if (Lib.connected) return true;
+    try {
+      await Lib.ensureTmdbReady?.();
+      if (Lib.serverTmdb) return true;
+      const res = await fetch(apiUrl('/api/tmdb/status'));
+      const json = (await res.json()) as { available?: boolean; key?: string };
+      return !!json.available || json.key === 'set';
+    } catch {
+      return false;
+    }
+  }
+
+  async function matchAndSync(libraryId?: string) {
+    if (!(await tmdbReady())) return 0;
+    setImportMsg('Matching posters and titles from TMDB…');
+    const result = await OrbitMedia.matchTmdb(Lib.key || undefined, libraryId);
+    await syncToSidebar();
+    return result.matched;
+  }
+
   async function afterAddLibrary(libraryId: string) {
     setScanningId(libraryId);
-    setImportMsg('Scanning and syncing…');
+    setImportMsg('Scanning files…');
     try {
       await OrbitMedia.scanLibrary(libraryId);
       const libs = await OrbitMedia.listLibraries();
       setLibraries(libs);
       const lib = libs.find((l) => l.id === libraryId);
-      await syncToSidebar();
-      setImportMsg(`"${lib?.name || 'Library'}" updated — check the sidebar.`);
+      let matched = 0;
+      if (await tmdbReady()) {
+        matched = await matchAndSync(libraryId);
+      } else {
+        await syncToSidebar();
+      }
+      setImportMsg(
+        matched > 0
+          ? `"${lib?.name || 'Library'}" ready — ${matched} titles matched with posters.`
+          : `"${lib?.name || 'Library'}" scanned — matching metadata…`,
+      );
       const st = await OrbitMedia.status();
       setStatus(st);
     } catch (e) {
@@ -324,7 +355,12 @@ export function MediaServerPanel({
     try {
       await OrbitMedia.scanLibrary(id);
       await reload();
-      await syncToSidebar();
+      if (await tmdbReady()) {
+        const matched = await matchAndSync(id);
+        setImportMsg(matched > 0 ? `Matched ${matched} titles from TMDB.` : 'Scan done. Few titles matched — check filenames or TMDB key.');
+      } else {
+        await syncToSidebar();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Scan failed');
     } finally {
@@ -411,14 +447,15 @@ export function MediaServerPanel({
   }
 
   async function matchTmdb() {
-    if (!Lib.connected) {
-      setError('TMDB is not available. Set ORBIT_TMDB_API_KEY in Docker.');
+    if (!(await tmdbReady())) {
+      setError('TMDB is not responding — restart Orbit and try again.');
       return;
     }
     setBusy(true);
+    setImportMsg('Matching from TMDB…');
     try {
       const result = await OrbitMedia.matchTmdb(Lib.key || undefined);
-      setImportMsg(`TMDB matched ${result.matched} titles.`);
+      setImportMsg(`TMDB matched ${result.matched} titles — posters and details should fill in.`);
       await syncToSidebar();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'TMDB match failed');
@@ -436,6 +473,10 @@ export function MediaServerPanel({
       <p className="conns-sub" style={{ marginBottom: 12 }}>
         Pick <strong>Movie</strong> or <strong>TV Show</strong> for how files are scanned. You name each library
         (Anime, Movies, Kids TV, etc.) and can add more folders to the same name later.
+      </p>
+      <p className="conns-sub oms-msg" style={{ marginBottom: 12 }}>
+        Posters, cast, and plot are filled automatically from <strong>TMDB</strong> after each scan. Use{' '}
+        <strong>Match TMDB</strong> to refresh metadata anytime.
       </p>
 
       {status?.ok && (

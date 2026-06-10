@@ -40,6 +40,9 @@ function showBootError(title, detail) {
 async function startServer() {
   // Packaged app lives in app.asar — auth/sqlite must write to userData, not inside the bundle.
   process.env.ORBIT_DATA_DIR = path.join(app.getPath('userData'), 'data');
+  if (!process.env.ORBIT_TMDB_API_KEY) {
+    process.env.ORBIT_TMDB_API_KEY = 'b379792391747f1606e1d7a933dd2aea';
+  }
   const mod = await import(pathToFileURL(path.join(ROOT, 'server', 'startServer.js')).href);
   let netMod = null;
   try {

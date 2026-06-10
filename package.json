@@ -14,6 +14,7 @@
     "start": "node server/index.js",
     "desktop": "npm run build && electron .",
     "desktop:dev": "npm run build && cross-env ORBIT_ELECTRON_DEBUG=1 DEBUG_PLEX=1 electron .",
+    "predist:win": "node scripts/prebuild-installer.mjs",
     "dist:win": "npm run build && electron-builder --win nsis",
     "dist:win:portable": "npm run build && electron-builder --win portable",
     "lint": "eslint .",

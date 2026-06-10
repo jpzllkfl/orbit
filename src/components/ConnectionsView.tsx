@@ -274,7 +274,7 @@ export function ConnectionsView({
           <p className="conns-p">
             {Lib.connected
               ? 'Built into Orbit — posters, backdrops, cast, and synopses work automatically (movies & shows).'
-              : 'Add ORBIT_TMDB_API_KEY to your Orbit Docker stack once. Users should not need to paste a key here.'}
+              : 'TMDB is built into Orbit — posters and metadata load automatically after library scans.'}
           </p>
           <div className="conns-field">
             <input

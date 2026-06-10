@@ -30,13 +30,13 @@ export function seedDefaultLibraries() {
   return syncCatalogLibraries();
 }
 
-export function scanAllLibraries(onProgress) {
+export async function scanAllLibraries(onProgress) {
   const libs = listLibraries().filter((l) => l.pathExists);
   const results = [];
   for (const lib of libs) {
     onProgress?.({ libraryId: lib.id, name: lib.name, phase: 'start' });
     try {
-      const r = scanLibrary(lib.id, (ev) =>
+      const r = await scanLibrary(lib.id, (ev) =>
         onProgress?.({ libraryId: lib.id, name: lib.name, ...ev }),
       );
       results.push({ libraryId: lib.id, name: lib.name, ok: true, ...r });

@@ -11,8 +11,10 @@ function itemsNeedingMatch(libraryId) {
     .all(libraryId);
 }
 
-function setItemTmdb(id, tmdbId) {
-  getDb().prepare('UPDATE media_items SET tmdb_id = ? WHERE id = ?').run(tmdbId, id);
+function setItemTmdb(id, tmdbId, title, year) {
+  getDb()
+    .prepare('UPDATE media_items SET tmdb_id = ?, title = COALESCE(?, title), year = COALESCE(?, year) WHERE id = ?')
+    .run(tmdbId, title || null, year ?? null, id);
 }
 
 function setShowTmdb(libraryId, showTitle, tmdbId) {
@@ -38,7 +40,8 @@ export async function matchLibrary(libraryId, apiKey, onProgress) {
       try {
         const hit = await tmdbSearch('movie', row.title, row.year, apiKey);
         if (hit?.id) {
-          setItemTmdb(row.id, hit.id);
+          const year = hit.release_date ? Number(String(hit.release_date).slice(0, 4)) : row.year;
+          setItemTmdb(row.id, hit.id, hit.title || row.title, year);
           matched++;
         }
       } catch {
