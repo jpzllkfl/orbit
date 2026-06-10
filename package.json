@@ -31,7 +31,9 @@
   "build": {
     "appId": "com.broken-eye.orbit",
     "productName": "Orbit",
-    "directories": { "output": "release" },
+    "directories": {
+      "output": "release"
+    },
     "files": [
       "dist/**/*",
       "server/**/*",
@@ -40,7 +42,9 @@
       "node_modules/**/*"
     ],
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "artifactName": "Orbit-Setup-${version}.${ext}"
     },
     "nsis": {
@@ -63,6 +67,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
+    "socket.io-client": "^4.8.3",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
     "vite": "^8.0.12"
