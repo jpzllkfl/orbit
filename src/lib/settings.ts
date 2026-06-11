@@ -24,6 +24,8 @@ export type OrbitSettings = {
   library: {
     defaultTab: 'recommended' | 'library' | 'collections';
     initialGridBatch: number;
+    autoCollections: boolean;
+    instantPosters: boolean;
   };
   hero: {
     home: HeroConfig;
@@ -54,6 +56,8 @@ export const DEFAULT_SETTINGS: OrbitSettings = {
   library: {
     defaultTab: 'recommended',
     initialGridBatch: 36,
+    autoCollections: true,
+    instantPosters: true,
   },
   hero: {
     home: { ...DEFAULT_HERO, source: 'trending_all', count: 10, seed: 3 },

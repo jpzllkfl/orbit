@@ -22,6 +22,7 @@ import { useFeaturedHero } from './hooks/useFeaturedHero';
 import { useOrbitBoot } from './hooks/useOrbitBoot';
 import { nextEpisodeAfter } from './lib/nextEpisode';
 import { invalidateTitleIndex, searchTitles, similarTitles, sortedTitlesForScope } from './lib/treeIndex';
+import { preloadKnownPosters } from './lib/posterPreload';
 import { loadSettings } from './lib/settings';
 import { syncWatchStateFromPlex } from './lib/plexWatchSync';
 import { newId, resultToNode } from './lib/nodeFactory';
@@ -337,6 +338,11 @@ export default function App() {
     setLibVisible(loadSettings().library.initialGridBatch);
     setCollVisible(24);
   }, [current.id, libTab]);
+
+  useEffect(() => {
+    if (!libAllTitles?.length || !loadSettings().library.instantPosters) return;
+    preloadKnownPosters(libAllTitles, Math.max(48, loadSettings().library.initialGridBatch));
+  }, [libAllTitles, current.id]);
 
   useEffect(() => {
     if (libTab !== 'library' || !libAllTitles?.length) return;

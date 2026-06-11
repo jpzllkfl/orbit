@@ -1,4 +1,5 @@
 import type { OrbitNode } from '../types/orbit';
+import { dedupeTitleNodes } from './dedupeTitles';
 import { countTitles } from './importUtils';
 
 let sig = '';
@@ -75,7 +76,7 @@ export function invalidateTitleIndex() {
 
 /** Sorted unique titles for a library or all libraries (indexed, no tree walk). */
 export function sortedTitlesForScope(root: OrbitNode, scope?: OrbitNode | null): OrbitNode[] {
-  const nodes = titleNodesForRoot(root, scope);
+  const nodes = dedupeTitleNodes(titleNodesForRoot(root, scope));
   return nodes.slice().sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
 }
 

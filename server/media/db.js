@@ -128,6 +128,7 @@ function migrateMediaMetadata(database) {
   if (!names.has('poster_path')) database.exec('ALTER TABLE media_items ADD COLUMN poster_path TEXT');
   if (!names.has('backdrop_path')) database.exec('ALTER TABLE media_items ADD COLUMN backdrop_path TEXT');
   if (!names.has('overview')) database.exec('ALTER TABLE media_items ADD COLUMN overview TEXT');
+  if (!names.has('genre')) database.exec('ALTER TABLE media_items ADD COLUMN genre TEXT');
 }
 
 export function resetDb() {

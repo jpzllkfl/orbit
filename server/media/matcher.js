@@ -1,7 +1,7 @@
 import { getDb } from './db.js';
 import { getLibrary, getLibraryFolders, listLibraries } from './libraries.js';
 import { externalIdsFromPath, movieSearchQueries, showSearchQueries } from './naming.js';
-import { sleep, tmdbDetails, tmdbFindExternal, tmdbSearchAny } from './tmdb.js';
+import { genreNameFromIds, sleep, tmdbDetails, tmdbFindExternal, tmdbSearchAny } from './tmdb.js';
 
 function itemsNeedingMatch(libraryId, force = false) {
   if (force) {
@@ -39,7 +39,7 @@ function setItemTmdb(id, hit, fallbackTitle, fallbackYear) {
       `UPDATE media_items SET
         tmdb_id = ?, title = COALESCE(?, title), year = COALESCE(?, year),
         poster_path = COALESCE(?, poster_path), backdrop_path = COALESCE(?, backdrop_path),
-        overview = COALESCE(?, overview)
+        overview = COALESCE(?, overview), genre = COALESCE(?, genre)
        WHERE id = ?`,
     )
     .run(
@@ -49,6 +49,7 @@ function setItemTmdb(id, hit, fallbackTitle, fallbackYear) {
       hit.poster_path || null,
       hit.backdrop_path || null,
       hit.overview || null,
+      genreNameFromIds(hit.genre_ids) || null,
       id,
     );
 }
@@ -60,7 +61,7 @@ function setShowTmdb(libraryId, showTitle, hit) {
       `UPDATE media_items SET
         tmdb_id = ?, show_title = COALESCE(?, show_title),
         poster_path = COALESCE(?, poster_path), backdrop_path = COALESCE(?, backdrop_path),
-        overview = COALESCE(?, overview)
+        overview = COALESCE(?, overview), genre = COALESCE(?, genre)
        WHERE library_id = ? AND show_title = ?`,
     )
     .run(
@@ -69,6 +70,7 @@ function setShowTmdb(libraryId, showTitle, hit) {
       hit.poster_path || null,
       hit.backdrop_path || null,
       hit.overview || null,
+      genreNameFromIds(hit.genre_ids) || null,
       libraryId,
       showTitle,
     );

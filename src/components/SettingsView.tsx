@@ -306,6 +306,28 @@ export function SettingsView({
                 <option value="72">72</option>
               </select>
             </label>
+            <label className="settings-row check">
+              <span>
+                <strong>Auto collections</strong>
+                <small>Group library titles into decade and genre collections automatically</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={settings.library.autoCollections}
+                onChange={(e) => update({ library: { ...settings.library, autoCollections: e.target.checked } })}
+              />
+            </label>
+            <label className="settings-row check">
+              <span>
+                <strong>Instant posters</strong>
+                <small>Show saved poster URLs immediately — no lazy-load wait when metadata is already known</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={settings.library.instantPosters}
+                onChange={(e) => update({ library: { ...settings.library, instantPosters: e.target.checked } })}
+              />
+            </label>
           </div>
         </section>
 

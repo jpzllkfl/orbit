@@ -1,4 +1,5 @@
 import type { OrbitNode } from '../types/orbit';
+import { decorateOmsLibraries } from './autoCollections';
 import { orbitMediaFetch } from './orbitApi';
 import { mediaApiUrl } from './orbitServer';
 
@@ -18,7 +19,7 @@ export async function fetchOmsTree(): Promise<OmsImportResult> {
   if (!json.tree) {
     return { tree: null, error: json.error || 'No scanned libraries found.' };
   }
-  return json;
+  return { ...json, tree: decorateOmsLibraries(json.tree) };
 }
 
 /** Merge OMS library nodes into an existing Plex-backed tree (skips duplicate lib titles). */

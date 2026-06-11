@@ -3,6 +3,7 @@ import { Lib, Plex } from '../lib';
 import { hiResBackdrop, hiResPoster } from '../lib/artUrls';
 import { plexArtFromNode } from '../lib/importUtils';
 import { acquireImageSlot, releaseImageSlot } from '../lib/imgQueue';
+import { loadSettings } from '../lib/settings';
 import type { OrbitNode } from '../types/orbit';
 
 const PALETTES = [
@@ -240,13 +241,21 @@ export function useArt(node: OrbitNode, overrideId?: string, enabled = true, car
   return art;
 }
 
+function posterUrlOnNode(node: OrbitNode) {
+  const ov = Lib.getOverride(node.id);
+  return ov?.poster || node.poster || null;
+}
+
 export function SmartPoster({ node, showTitle = true }: { node: OrbitNode; showTitle?: boolean }) {
+  const instant = loadSettings().library.instantPosters;
+  const knownUrl = posterUrlOnNode(node);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
-  const [src, setSrc] = useState<string | null>(null);
+  const [visible, setVisible] = useState(!!(instant && knownUrl));
+  const [src, setSrc] = useState<string | null>(instant && knownUrl ? hiResPoster(knownUrl) || knownUrl : null);
   const [loaded, setLoaded] = useState(false);
   const slotHeld = useRef(false);
   useEffect(() => {
+    if (instant && knownUrl) return;
     const el = wrapRef.current;
     if (!el) return;
     const io = new IntersectionObserver(
@@ -256,12 +265,12 @@ export function SmartPoster({ node, showTitle = true }: { node: OrbitNode; showT
           io.disconnect();
         }
       },
-      { rootMargin: '160px' },
+      { rootMargin: instant ? '400px' : '160px' },
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [node.id]);
-  const art = useArt(node, undefined, visible, true);
+  }, [node.id, instant, knownUrl]);
+  const art = useArt(node, undefined, visible || !!(instant && knownUrl), true);
   const poster = art?.poster;
   const [fallbackPoster, setFallbackPoster] = useState<string | null>(null);
   useEffect(() => {
@@ -276,6 +285,11 @@ export function SmartPoster({ node, showTitle = true }: { node: OrbitNode; showT
     }
     const url = fallbackPoster || poster;
     if (!visible || !url) return;
+    const resolved = hiResPoster(url) || url;
+    if (instant && (node.poster || Lib.getOverride(node.id)?.poster)) {
+      setSrc(resolved);
+      return;
+    }
     let cancelled = false;
     acquireImageSlot().then(() => {
       if (cancelled) {
@@ -283,7 +297,7 @@ export function SmartPoster({ node, showTitle = true }: { node: OrbitNode; showT
         return;
       }
       slotHeld.current = true;
-      setSrc(hiResPoster(url) || url);
+      setSrc(resolved);
     });
     return () => {
       cancelled = true;
@@ -299,7 +313,7 @@ export function SmartPoster({ node, showTitle = true }: { node: OrbitNode; showT
   };
   return (
     <div ref={wrapRef} style={{ position: 'absolute', inset: 0, background: '#0b0e14' }}>
-      <div style={{ position: 'absolute', inset: 0, opacity: loaded ? 0 : 1, transition: 'opacity .15s' }}>
+      <div style={{ position: 'absolute', inset: 0, opacity: loaded ? 0 : 1, transition: instant ? 'opacity .05s' : 'opacity .15s' }}>
         <ArtView node={node} />
       </div>
       {src && (

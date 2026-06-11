@@ -10,11 +10,30 @@ function libKey(name) {
   return (name || 'lib').toLowerCase().replace(/[^a-z0-9]/g, '') || 'lib';
 }
 
+function normTitle(s) {
+  return (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function rowScore(row) {
+  return (row.poster_path ? 4 : 0) + (row.backdrop_path ? 2 : 0) + (row.tmdb_id ? 2 : 0) + (row.file_size || 0) / 1e15;
+}
+
+function dedupeMovieRows(rows) {
+  const best = new Map();
+  for (const row of rows) {
+    if (row.type !== 'movie') continue;
+    const key = row.tmdb_id ? `tmdb:${row.tmdb_id}` : `title:${normTitle(row.title)}:${row.year || ''}`;
+    const prev = best.get(key);
+    if (!prev || rowScore(row) > rowScore(prev)) best.set(key, row);
+  }
+  return [...best.values()];
+}
+
 function allItemsForLibrary(libraryId) {
   return getDb()
     .prepare(
-      `SELECT id, type, title, year, season, episode, show_title, file_path, scanned_at,
-              tmdb_id, poster_path, backdrop_path, overview
+      `SELECT id, type, title, year, season, episode, show_title, file_path, file_size, scanned_at,
+              tmdb_id, poster_path, backdrop_path, overview, genre
        FROM media_items WHERE library_id = ? ORDER BY title`,
     )
     .all(libraryId);
@@ -34,6 +53,7 @@ function movieNode(row) {
     type: 'movie',
     title: row.title,
     year: row.year || undefined,
+    genre: row.genre || undefined,
     tmdbId: row.tmdb_id || undefined,
     poster: art.poster,
     backdrop: art.backdrop,
@@ -47,9 +67,11 @@ function movieNode(row) {
 function buildTvChildren(rows, libraryId) {
   const byShow = new Map();
   for (const row of rows) {
-    const showName = (row.show_title || row.title || 'Unknown').trim();
-    if (!byShow.has(showName)) byShow.set(showName, []);
-    byShow.get(showName).push(row);
+    const showKey = row.tmdb_id
+      ? `tmdb:${row.tmdb_id}`
+      : `name:${normTitle(row.show_title || row.title || 'Unknown')}`;
+    if (!byShow.has(showKey)) byShow.set(showKey, []);
+    byShow.get(showKey).push(row);
   }
 
   const shows = [];
@@ -64,6 +86,7 @@ function buildTvChildren(rows, libraryId) {
       type: 'show',
       title: withMeta.show_title || showTitle,
       seasons: seasons.size || undefined,
+      genre: withMeta.genre || undefined,
       tmdbId,
       poster: art.poster,
       backdrop: art.backdrop,
@@ -81,7 +104,8 @@ function buildTvChildren(rows, libraryId) {
 
 function buildLibraryNode(lib) {
   const rows = allItemsForLibrary(lib.id);
-  const children = lib.type === 'movie' ? rows.map(movieNode) : buildTvChildren(rows, lib.id);
+  const movieRows = lib.type === 'movie' ? dedupeMovieRows(rows) : rows;
+  const children = lib.type === 'movie' ? movieRows.map(movieNode) : buildTvChildren(rows, lib.id);
   return {
     id: newId('lib'),
     type: 'library',

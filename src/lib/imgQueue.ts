@@ -1,6 +1,6 @@
 /** Limits concurrent poster image loads so grids don't stampede the proxy. */
 let active = 0;
-const MAX = 12;
+const MAX = 32;
 const waiters: Array<() => void> = [];
 
 export function acquireImageSlot(): Promise<void> {

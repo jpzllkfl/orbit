@@ -28,6 +28,7 @@ const KEEP = new Set([
   'addedAt',
   'tmdbId',
   'smart',
+  'auto',
   'children',
 ]);
 

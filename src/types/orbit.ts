@@ -15,6 +15,8 @@ export interface OrbitNode {
   id: string;
   type: NodeType;
   smart?: boolean;
+  /** Auto-generated decade/genre collection from OMS library. */
+  auto?: boolean;
   title: string;
   year?: number;
   genre?: string;
