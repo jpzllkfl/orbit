@@ -351,6 +351,33 @@ window.OrbitPlex = (function () {
     }
   }
 
+  function normShowTitle(s) {
+    return (s || '').trim().toLowerCase();
+  }
+
+  /** Theme for a show — uses plexKey, cached theme path, or Plex library search (OMS-only nodes). */
+  async function resolveShowTheme(node) {
+    if (!conn || !node || node.type !== 'show') return null;
+    if (node.theme) return themeUrl(node.theme);
+    if (node.plexKey) return getThemeUrl(node.plexKey);
+    const title = (node.title || '').trim();
+    if (!title) return null;
+    try {
+      const j = await api('/search?query=' + encodeURIComponent(title) + '&limit=15');
+      const hits = asList(j.MediaContainer && j.MediaContainer.Metadata).filter((m) => m.type === 'show');
+      let match = null;
+      if (node.tmdbId) {
+        const guid = 'tmdb://' + node.tmdbId;
+        match = hits.find((h) => asList(h.Guid).some((g) => g.id === guid));
+      }
+      if (!match) match = hits.find((h) => normShowTitle(h.title) === normShowTitle(title));
+      if (!match || !match.ratingKey) return null;
+      return getThemeUrl(String(match.ratingKey));
+    } catch (e) {
+      return null;
+    }
+  }
+
   function themeUrl(path) {
     return mediaUrl(path);
   }
@@ -997,7 +1024,7 @@ window.OrbitPlex = (function () {
     // auth + discovery (real)
     createPin, authUrl, pollPin, signIn, resources, bestConnection, connectServer, restoreFromConnState,
     // library + media (real)
-    sections, buildTree, fetchCollections, img, imgUrl, mediaUrl, themeUrl, getThemeUrl, api, toTitle,
+    sections, buildTree, fetchCollections, img, imgUrl, mediaUrl, themeUrl, getThemeUrl, resolveShowTheme, api, toTitle,
     fetchMetadata, fetchDetails, fetchSubtitleStreamUrl, resolvePlayback, pickShowEpisode, fetchSeasons, fetchShowLeaves, scrobble, unscrobble, reportProgress,
     fetchHomeHub, fetchContinueWatching, fetchOnDeck,
     sendTimeline, pingTranscodeSession, getPlaybackSession, startPlaybackSession, beginNewPlayback: startPlaybackSession, isLocalConnection,

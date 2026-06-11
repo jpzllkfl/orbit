@@ -4,6 +4,7 @@ import { OrbitMedia } from '../lib/orbitMedia';
 import type { Episode, OrbitNode } from '../types/orbit';
 import { hiResBackdrop } from '../lib/artUrls';
 import { ArtView, SmartLandscape, SmartPoster, useArt } from './Posters';
+import { episodesNeedTmdbEnrich, mergeEpisodesWithTmdb, mergeSeasonRowsWithTmdb } from '../lib/tvMetadata';
 
 interface TitleMeta {
   overview?: string;
@@ -290,7 +291,7 @@ export function DetailView({
 
     (async () => {
       let url = node.theme ? Plex.themeUrl(node.theme) : null;
-      if (!url && node.plexKey && Plex.connected) url = await Plex.getThemeUrl(node.plexKey);
+      if (!url && Plex.connected && isShow) url = await Plex.resolveShowTheme(node);
       if (!alive || !url) return;
       setHasTheme(true);
       audio.src = url;
@@ -315,7 +316,7 @@ export function DetailView({
       alive = false;
       stopTheme();
     };
-  }, [node.id, node.plexKey, node.theme]);
+  }, [node.id, node.plexKey, node.theme, isShow]);
 
   useEffect(() => {
     const a = themeAudio.current;
@@ -381,6 +382,14 @@ export function DetailView({
           episodes: r.episodes || Meta.seasonCount(node, r.season),
         }));
       }
+      if (rows.some((r) => !r.poster) && Lib.connected) {
+        try {
+          const tmdbSeasons = await Lib.fetchShowSeasons(node);
+          if (tmdbSeasons.length) rows = mergeSeasonRowsWithTmdb(rows, tmdbSeasons);
+        } catch {
+          /* TMDB unavailable */
+        }
+      }
       setSeasonRows(rows);
     })();
     return () => {
@@ -414,59 +423,74 @@ export function DetailView({
     let alive = true;
     setSeasonEps(null);
 
-    const fromPlex = plexLeaves?.filter((l) => l.season === season).map(leafToEpisode);
-    if (fromPlex?.length) {
-      setSeasonEps(fromPlex);
-      return () => {
-        alive = false;
-      };
-    }
+    (async () => {
+      const fromPlex = plexLeaves?.filter((l) => l.season === season).map(leafToEpisode);
+      if (fromPlex?.length) {
+        let eps = fromPlex;
+        if (Lib.connected && episodesNeedTmdbEnrich(eps)) {
+          try {
+            const tmdb = await Lib.fetchSeasonEpisodes(node, season);
+            if (tmdb.length) eps = mergeEpisodesWithTmdb(eps, tmdb);
+          } catch {
+            /* TMDB unavailable */
+          }
+        }
+        if (alive) setSeasonEps(eps);
+        return;
+      }
 
-    if (node.plexKey && Plex.connected && plexLeaves === null) {
-      return () => {
-        alive = false;
-      };
-    }
+      if (node.plexKey && Plex.connected && plexLeaves === null) return;
 
-    if (node.omsLibraryId && node.omsShowTitle) {
-      OrbitMedia.showEpisodes(node.omsLibraryId, node.omsShowTitle, season)
-        .then((rows) => {
-          if (!alive || !rows.length) return;
-          setSeasonEps(
-            rows.map((r) => ({
+      let base: Episode[] | null = null;
+
+      if (node.omsLibraryId && node.omsShowTitle) {
+        try {
+          const rows = await OrbitMedia.showEpisodes(node.omsLibraryId, node.omsShowTitle, season);
+          if (rows.length) {
+            base = rows.map((r) => ({
               n: r.episode,
               season: r.season,
               title: r.title,
               omsItemId: r.id,
-            })),
-          );
-        })
-        .catch(() => {});
-      return () => {
-        alive = false;
-      };
-    }
+            }));
+          }
+        } catch {
+          /* OMS unavailable */
+        }
+      }
 
-    if (Lib.connected) {
-      Lib.fetchSeasonEpisodes(node, season).then((rows) => {
-        if (!alive || !rows.length) return;
-        setSeasonEps(
-          rows.map((r) => ({
+      if (!base?.length && Lib.connected) {
+        const rows = await Lib.fetchSeasonEpisodes(node, season);
+        if (rows.length) {
+          base = rows.map((r) => ({
             n: r.n,
             season: r.season,
             title: r.title,
             synopsis: r.synopsis,
             runtime: r.runtime ?? undefined,
             still: r.still,
-          }))
-        );
-      });
-    }
+          }));
+        }
+      }
+
+      if (!base?.length) return;
+
+      if (Lib.connected && episodesNeedTmdbEnrich(base)) {
+        try {
+          const tmdb = await Lib.fetchSeasonEpisodes(node, season);
+          if (tmdb.length) base = mergeEpisodesWithTmdb(base, tmdb);
+        } catch {
+          /* TMDB unavailable */
+        }
+      }
+
+      if (alive) setSeasonEps(base);
+    })();
 
     return () => {
       alive = false;
     };
-  }, [node.id, season, plexLeaves, isShow, node.plexKey, node.omsLibraryId, node.omsShowTitle]);
+  }, [node, season, plexLeaves, isShow]);
 
   useEffect(() => {
     let alive = true;
@@ -824,9 +848,15 @@ export function DetailView({
               <h3>Episodes</h3>
               <div className="dt-season-sel">
                 <select value={season} onChange={(e) => setSeason(+e.target.value)}>
-                  {Array.from({ length: node.seasons || 1 }).map((_, i) => (
-                    <option key={i} value={i + 1}>
-                      Season {i + 1} · {Meta.seasonCount(node, i + 1)} eps
+                  {(seasonRows.length
+                    ? seasonRows
+                    : Array.from({ length: node.seasons || 1 }, (_, i) => ({
+                        season: i + 1,
+                        episodes: Meta.seasonCount(node, i + 1),
+                      }))
+                  ).map((s) => (
+                    <option key={s.season} value={s.season}>
+                      Season {s.season} · {s.episodes} eps
                     </option>
                   ))}
                 </select>

@@ -145,6 +145,7 @@ export interface OrbitPlexClient {
   transcodeUrl(title: OrbitNode, opts?: { maxBitrate?: number; quality?: number; session?: string; offset?: number }): string | null;
   themeUrl(path: string): string | null;
   getThemeUrl(ratingKey: string): Promise<string | null>;
+  resolveShowTheme(node: OrbitNode): Promise<string | null>;
   fetchMetadata(ratingKey: string): Promise<OrbitNode | null>;
   fetchDetails(ratingKey: string): Promise<{
     overview?: string;
