@@ -457,13 +457,40 @@ export function MediaServerPanel({
     }
   }
 
+  async function matchLibraryTmdb(libraryId: string, force = false) {
+    if (!(await tmdbReady())) {
+      setError('TMDB is not responding — restart Orbit and try again.');
+      return;
+    }
+    const lib = libraries.find((l) => l.id === libraryId);
+    setBusy(true);
+    setImportMsg(
+      force
+        ? `Force rematching all titles in ${lib?.name || 'library'}…`
+        : `Matching unmatched titles in ${lib?.name || 'library'}…`,
+    );
+    try {
+      const result = await OrbitMedia.matchTmdb(undefined, libraryId, force);
+      await syncToSidebar();
+      setImportMsg(
+        result.matched > 0
+          ? `${lib?.name || 'Library'}: matched ${result.matched} title${result.matched === 1 ? '' : 's'}.`
+          : `${lib?.name || 'Library'}: no new matches — check folder names or use Force rematch.`,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'TMDB match failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function matchTmdb() {
     if (!(await tmdbReady())) {
       setError('TMDB is not responding — restart Orbit and try again.');
       return;
     }
     setBusy(true);
-    setImportMsg('Refreshing sidebar, then matching TMDB in the background…');
+    setImportMsg('Refreshing sidebar, then force-matching all libraries in the background…');
     try {
       await syncToSidebar();
       void OrbitMedia.matchTmdb(undefined, undefined, true).then(async (result) => {
@@ -554,6 +581,24 @@ export function MediaServerPanel({
                   </button>
                   <button
                     type="button"
+                    className="conns-btn sm"
+                    disabled={busy || lib.itemCount < 1}
+                    title="Match titles missing posters"
+                    onClick={() => matchLibraryTmdb(lib.id, false)}
+                  >
+                    Match
+                  </button>
+                  <button
+                    type="button"
+                    className="conns-btn sm"
+                    disabled={busy || lib.itemCount < 1}
+                    title="Clear and rematch every title in this library"
+                    onClick={() => matchLibraryTmdb(lib.id, true)}
+                  >
+                    Force
+                  </button>
+                  <button
+                    type="button"
                     className="conns-btn danger sm"
                     disabled={busy}
                     onClick={() => setConfirmDeleteLib(lib)}
@@ -599,7 +644,7 @@ export function MediaServerPanel({
       {status?.ok && status.items > 0 && (
         <div className="oms-import-bar">
           <button type="button" className="conns-btn sm" disabled={busy} onClick={matchTmdb}>
-            {ic.image({})} Match TMDB
+            {ic.image({})} Match all libraries (force)
           </button>
         </div>
       )}

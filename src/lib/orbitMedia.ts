@@ -119,6 +119,25 @@ export const OrbitMedia = {
     });
   },
 
+  async matchTitle(opts: {
+    libraryId?: string;
+    showTitle?: string;
+    itemId?: string;
+    force?: boolean;
+    tmdbKey?: string;
+  }): Promise<{ ok: boolean; matched: number }> {
+    return api('/match', {
+      method: 'POST',
+      body: JSON.stringify({
+        tmdbKey: opts.tmdbKey || undefined,
+        libraryId: opts.libraryId,
+        showTitle: opts.showTitle,
+        itemId: opts.itemId,
+        force: !!opts.force,
+      }),
+    });
+  },
+
   async showSeasons(libraryId: string, showTitle: string): Promise<Array<{ season: number; title: string; episodes: number }>> {
     const q =
       '?libraryId=' +

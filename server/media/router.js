@@ -4,7 +4,7 @@ import { mediaStats } from './db.js';
 import { addLibrary, addLibraryFolder, getLibrary, listLibraries, removeLibrary, removeLibraryFolder, updateLibrary, wipeAllLibraries } from './libraries.js';
 import { listShowEpisodes, listShowSeasons } from './episodes.js';
 import { buildOrbitTreeFromOms } from './importTree.js';
-import { matchAllLibraries, matchLibrary } from './matcher.js';
+import { matchAllLibraries, matchLibrary, matchMediaItem, matchShowByTitle } from './matcher.js';
 import { listItems, scanLibrary } from './scanner.js';
 import { DEFAULT_OMS_LIBRARIES } from './catalog.js';
 import { scanAllLibraries, seedDefaultLibraries } from './seed.js';
@@ -76,13 +76,20 @@ export function createMediaRouter() {
   });
 
   router.post('/match', async (req, res) => {
-    const { tmdbKey, libraryId, force } = req.body || {};
+    const { tmdbKey, libraryId, force, showTitle, itemId } = req.body || {};
     const key = resolveTmdbKey(tmdbKey);
     try {
       const matchOpts = { force: !!force };
-      const result = libraryId
-        ? await matchLibrary(libraryId, key, undefined, matchOpts)
-        : await matchAllLibraries(key, undefined, matchOpts);
+      let result;
+      if (itemId) {
+        result = await matchMediaItem(itemId, key, matchOpts);
+      } else if (libraryId && showTitle) {
+        result = await matchShowByTitle(libraryId, showTitle, key, matchOpts);
+      } else if (libraryId) {
+        result = await matchLibrary(libraryId, key, undefined, matchOpts);
+      } else {
+        result = await matchAllLibraries(key, undefined, matchOpts);
+      }
       res.json({ ok: true, ...result });
     } catch (e) {
       res.status(400).json({ error: e.message || 'Match failed.' });

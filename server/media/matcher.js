@@ -74,6 +74,87 @@ function setShowTmdb(libraryId, showTitle, hit) {
     );
 }
 
+async function resolveShowHit(showTitle, sample, root, apiKey) {
+  const queries = showSearchQueries(showTitle, sample, root);
+  let hit = null;
+  if (sample.file_path) {
+    const ids = externalIdsFromPath(sample.file_path, root);
+    if (ids.tvdbId) {
+      hit = await tmdbFindExternal('tv', ids.tvdbId, 'tvdb_id', apiKey);
+    }
+    if (!hit?.id && ids.tmdbId) {
+      try {
+        hit = await tmdbDetails('tv', ids.tmdbId, apiKey);
+      } catch {
+        /* fall back to search */
+      }
+    }
+  }
+  if (!hit?.id) {
+    hit = await tmdbSearchAny('tv', queries, sample.year, apiKey);
+  }
+  return hit;
+}
+
+/** Re-match one TV show by folder/show name. */
+export async function matchShowByTitle(libraryId, showTitle, apiKey, opts = {}) {
+  const lib = getLibrary(libraryId);
+  if (!lib || lib.type !== 'tv') throw new Error('TV library not found.');
+  const title = (showTitle || '').trim();
+  if (!title) throw new Error('Show title required.');
+  if (opts.force) {
+    getDb()
+      .prepare(
+        `UPDATE media_items SET tmdb_id = NULL, poster_path = NULL, backdrop_path = NULL, overview = NULL
+         WHERE library_id = ? AND show_title = ?`,
+      )
+      .run(libraryId, title);
+  }
+  const sample = getDb()
+    .prepare(
+      `SELECT id, type, title, year, show_title, file_path, file_name FROM media_items
+       WHERE library_id = ? AND show_title = ? LIMIT 1`,
+    )
+    .get(libraryId, title);
+  if (!sample) throw new Error('Show not found in library.');
+  const hit = await resolveShowHit(title, sample, libraryRootPath(libraryId), apiKey);
+  if (hit?.id) {
+    setShowTmdb(libraryId, title, hit);
+    return { matched: 1, libraryId, showTitle: title };
+  }
+  return { matched: 0, libraryId, showTitle: title };
+}
+
+/** Re-match one movie file or its parent TV show. */
+export async function matchMediaItem(itemId, apiKey, opts = {}) {
+  const row = getDb()
+    .prepare(
+      `SELECT id, library_id, type, title, year, show_title, file_path, file_name FROM media_items WHERE id = ?`,
+    )
+    .get(itemId);
+  if (!row) throw new Error('Item not found.');
+  const lib = getLibrary(row.library_id);
+  if (!lib) throw new Error('Library not found.');
+  if (opts.force) {
+    getDb()
+      .prepare(
+        `UPDATE media_items SET tmdb_id = NULL, poster_path = NULL, backdrop_path = NULL, overview = NULL WHERE id = ?`,
+      )
+      .run(itemId);
+  }
+  if (lib.type === 'movie') {
+    const hit = await tmdbSearchAny('movie', movieSearchQueries(row, libraryRootPath(row.library_id)), row.year, apiKey);
+    if (hit?.id) {
+      setItemTmdb(row.id, hit, row.title, row.year);
+      return { matched: 1, libraryId: row.library_id, itemId };
+    }
+    return { matched: 0, libraryId: row.library_id, itemId };
+  }
+  const showTitle = (row.show_title || '').trim();
+  if (!showTitle) throw new Error('No show title on file.');
+  return matchShowByTitle(row.library_id, showTitle, apiKey, opts);
+}
+
 /** Match movies by title/year; TV by show folder name once per show. */
 export async function matchLibrary(libraryId, apiKey, onProgress, opts = {}) {
   const lib = getLibrary(libraryId);
@@ -112,26 +193,9 @@ export async function matchLibrary(libraryId, apiKey, onProgress, opts = {}) {
     for (const [showTitle, sample] of byShow) {
       if (showDone.has(showTitle)) continue;
       showDone.add(showTitle);
-      const queries = showSearchQueries(showTitle, sample, root);
-      onProgress?.({ message: `Matching show ${queries[0] || showTitle}…` });
+      onProgress?.({ message: `Matching show ${showTitle}…` });
       try {
-        let hit = null;
-        if (sample.file_path) {
-          const ids = externalIdsFromPath(sample.file_path, root);
-          if (ids.tvdbId) {
-            hit = await tmdbFindExternal('tv', ids.tvdbId, 'tvdb_id', apiKey);
-          }
-          if (!hit?.id && ids.tmdbId) {
-            try {
-              hit = await tmdbDetails('tv', ids.tmdbId, apiKey);
-            } catch {
-              /* fall back to search */
-            }
-          }
-        }
-        if (!hit?.id) {
-          hit = await tmdbSearchAny('tv', queries, sample.year, apiKey);
-        }
+        const hit = await resolveShowHit(showTitle, sample, root, apiKey);
         if (hit?.id) {
           setShowTmdb(libraryId, showTitle, hit);
           matched++;

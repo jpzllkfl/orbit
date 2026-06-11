@@ -26,6 +26,8 @@ import { loadSettings } from './lib/settings';
 import { syncWatchStateFromPlex } from './lib/plexWatchSync';
 import { newId, resultToNode } from './lib/nodeFactory';
 import { ContextMenu, type ContextMenuItem } from './components/ContextMenu';
+import { TitleInfoModal } from './components/TitleInfoModal';
+import { OrbitMedia } from './lib/orbitMedia';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { deleteOrbitLibrary } from './lib/deleteOrbitLibrary';
 import { mergeCollectionsInTree, moveNodeInTree, removeNodeFromTree } from './lib/treeMutations';
@@ -102,6 +104,7 @@ export default function App() {
   const [mergeSource, setMergeSource] = useState<OrbitNode | null>(null);
   const [mergeDest, setMergeDest] = useState<OrbitNode | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; node: OrbitNode } | null>(null);
+  const [infoNode, setInfoNode] = useState<OrbitNode | null>(null);
   const [addToCollFor, setAddToCollFor] = useState<OrbitNode | null>(null);
   const archive = ORBIT_DATA.ARCHIVE;
   const [drag, setDrag] = useState<OrbitNode | null>(null);
@@ -630,15 +633,60 @@ export default function App() {
     setVer((v) => v + 1);
   }
 
+  async function refreshTitleMetadata(node: OrbitNode) {
+    const hasOms = !!(node.omsLibraryId || node.omsItemId);
+    try {
+      if (hasOms) {
+        if (node.type === 'show' && node.omsLibraryId && node.omsShowTitle) {
+          await OrbitMedia.matchTitle({ libraryId: node.omsLibraryId, showTitle: node.omsShowTitle, force: true });
+        } else if (node.omsItemId) {
+          await OrbitMedia.matchTitle({ itemId: node.omsItemId, force: true });
+        }
+        const { syncOmsTreeFromHome } = await import('./lib/omsSync');
+        const merged = await syncOmsTreeFromHome(tree, { force: true });
+        if (merged) {
+          setTree(merged);
+          invalidateTitleIndex();
+          setVer((v) => v + 1);
+        }
+      } else {
+        const art = await Lib.resolve(node);
+        if (art?.poster || art?.backdrop) Lib.seed(node, art);
+        setVer((v) => v + 1);
+      }
+    } catch {
+      /* retry from menu */
+    }
+  }
+
   function buildCtxItems(node: OrbitNode): ContextMenuItem[] {
     const par = OT.findParent(tree, node.id);
     const inCollection = par?.type === 'collection';
     const isTitle = node.type === 'movie' || node.type === 'show';
+    const watched = isTitle && Progress.isWatched(node.id);
 
     if (isTitle) {
       return [
         { label: 'Open', icon: I.film({}), onClick: () => { setCtxMenu(null); openTitle(node); } },
         { label: 'Play', icon: I.play({}), onClick: () => { setCtxMenu(null); playTitle(node); } },
+        {
+          label: watched ? 'Mark unwatched' : 'Mark watched',
+          icon: I.check({}),
+          onClick: () => {
+            Progress.setWatched(node.id, !watched);
+            setCtxMenu(null);
+            setVer((v) => v + 1);
+          },
+        },
+        {
+          label: 'Refresh metadata',
+          icon: I.spark({}),
+          onClick: () => {
+            setCtxMenu(null);
+            void refreshTitleMetadata(node);
+          },
+        },
+        { label: 'Get info', icon: I.doc({}), onClick: () => { setCtxMenu(null); setInfoNode(node); } },
         { label: 'Edit artwork', icon: I.image({}), onClick: () => { setCtxMenu(null); openEditArt(node); } },
         {
           label: 'Add to collection…',
@@ -1561,6 +1609,8 @@ export default function App() {
         {ctxMenu && (
           <ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={buildCtxItems(ctxMenu.node)} onClose={() => setCtxMenu(null)} />
         )}
+
+        {infoNode && <TitleInfoModal node={infoNode} onClose={() => setInfoNode(null)} />}
 
         <ModalHost
           tree={tree}

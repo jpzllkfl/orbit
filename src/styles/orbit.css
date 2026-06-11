@@ -192,6 +192,11 @@ html.orbit-desktop .h-row {
 .nav-lib-del svg { width: 16px; height: 16px; }
 .confirm-dialog { max-width: 420px; }
 .confirm-dialog-msg { color: var(--text-2); font-size: 14px; line-height: 1.5; margin: 0 0 16px; }
+.title-info-modal { max-width: 560px; }
+.title-info-body { display: flex; flex-direction: column; gap: 10px; max-height: 55vh; overflow: auto; margin-bottom: 12px; }
+.title-info-row { display: grid; grid-template-columns: 108px 1fr; gap: 8px; font-size: 13px; align-items: start; }
+.title-info-label { color: var(--muted); }
+.title-info-val { word-break: break-all; font-size: 12px; color: var(--text-2); }
 .lib-nav-edit .nav-item { cursor: grab; }
 .lib-nav-edit .nav-item.dragging { opacity: .45; }
 .lib-nav-edit .nav-item.drop-target { background: color-mix(in oklch, var(--cool), transparent 88%); outline: 1px dashed color-mix(in oklch, var(--cool), transparent 40%); }
