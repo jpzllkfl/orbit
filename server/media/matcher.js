@@ -1,7 +1,7 @@
 import { getDb } from './db.js';
 import { getLibrary, getLibraryFolders, listLibraries } from './libraries.js';
-import { movieSearchQueries, showSearchQueries } from './naming.js';
-import { sleep, tmdbSearchAny } from './tmdb.js';
+import { externalIdsFromPath, movieSearchQueries, showSearchQueries } from './naming.js';
+import { sleep, tmdbDetails, tmdbFindExternal, tmdbSearchAny } from './tmdb.js';
 
 function itemsNeedingMatch(libraryId, force = false) {
   if (force) {
@@ -115,7 +115,23 @@ export async function matchLibrary(libraryId, apiKey, onProgress, opts = {}) {
       const queries = showSearchQueries(showTitle, sample, root);
       onProgress?.({ message: `Matching show ${queries[0] || showTitle}…` });
       try {
-        const hit = await tmdbSearchAny('tv', queries, sample.year, apiKey);
+        let hit = null;
+        if (sample.file_path) {
+          const ids = externalIdsFromPath(sample.file_path, root);
+          if (ids.tvdbId) {
+            hit = await tmdbFindExternal('tv', ids.tvdbId, 'tvdb_id', apiKey);
+          }
+          if (!hit?.id && ids.tmdbId) {
+            try {
+              hit = await tmdbDetails('tv', ids.tmdbId, apiKey);
+            } catch {
+              /* fall back to search */
+            }
+          }
+        }
+        if (!hit?.id) {
+          hit = await tmdbSearchAny('tv', queries, sample.year, apiKey);
+        }
         if (hit?.id) {
           setShowTmdb(libraryId, showTitle, hit);
           matched++;

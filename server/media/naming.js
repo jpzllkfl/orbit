@@ -111,10 +111,51 @@ export function parseEpisode(fileName) {
 export function showFromPath(filePath, libraryRoot) {
   for (const folder of folderNamesFromPath(filePath, libraryRoot)) {
     if (/^season\s*\d/i.test(folder) || /^s\d{1,2}$/i.test(folder)) continue;
+    const ids = externalIdsFromText(folder);
+    if (ids.tvdbId || ids.tmdbId) continue;
     const fromFolder = titleFromFolderName(folder);
     if (!isWeakTitle(fromFolder.title)) return fromFolder.title;
   }
   return null;
+}
+
+/** Extract show name from filename before S01E01 / 1x01 (flat TV folder layouts). */
+export function showFromFileName(fileName) {
+  const raw = baseName(fileName);
+  const patterns = [
+    /[Ss](\d{1,3})[Ee](\d{1,3})/,
+    /(\d{1,2})[xX](\d{1,3})/,
+    /Season\s*(\d{1,2}).*Episode\s*(\d{1,3})/i,
+  ];
+  for (const re of patterns) {
+    const m = raw.match(re);
+    if (!m || m.index == null) continue;
+    let title = raw.slice(0, m.index).replace(/[-–—_.]\s*$/, '').trim();
+    title = cleanReleaseTitle(title);
+    if (!isWeakTitle(title)) return title;
+  }
+  return null;
+}
+
+/** Parse Sonarr-style {tvdb-12345} or {tmdb-67890} tags from a path segment. */
+export function externalIdsFromText(text) {
+  const s = String(text || '');
+  const tvdb = s.match(/(?:^|[\s.\-_[{])tvdb[-:\s]?(\d{1,10})(?:\s*\})?/i);
+  const tmdb = s.match(/(?:^|[\s.\-_[{])tmdb[-:\s]?(\d{1,10})(?:\s*\})?/i);
+  return {
+    tvdbId: tvdb ? Number(tvdb[1]) : null,
+    tmdbId: tmdb ? Number(tmdb[1]) : null,
+  };
+}
+
+/** Walk folder path (and filename) for TVDB/TMDB id tags. */
+export function externalIdsFromPath(filePath, libraryRoot) {
+  for (const folder of folderNamesFromPath(filePath, libraryRoot)) {
+    const ids = externalIdsFromText(folder);
+    if (ids.tvdbId || ids.tmdbId) return ids;
+  }
+  const base = filePath.replace(/^.*[/\\]/, '');
+  return externalIdsFromText(base);
 }
 
 /** Build ordered TMDB search queries for a movie row. */
@@ -145,12 +186,13 @@ export function showSearchQueries(showTitle, sampleRow, libraryRoot) {
   const seen = new Set();
   const add = (t) => {
     const q = (t || '').trim();
-    if (!q || seen.has(q.toLowerCase())) return;
+    if (!q || seen.has(q.toLowerCase()) || isWeakTitle(q)) return;
     seen.add(q.toLowerCase());
     queries.push(q);
   };
 
   add(showTitle);
+  if (sampleRow?.file_name) add(showFromFileName(sampleRow.file_name));
   if (sampleRow?.file_path) {
     for (const folder of folderNamesFromPath(sampleRow.file_path, libraryRoot)) {
       if (/^season\s*\d/i.test(folder) || /^s\d{1,2}$/i.test(folder)) continue;

@@ -3,7 +3,7 @@ import path from 'path';
 import { getDb } from './db.js';
 import { getLibrary, getLibraryFolders, updateLibraryScan } from './libraries.js';
 import { matchLibrary } from './matcher.js';
-import { isVideoFile, movieTitleFromPath, parseEpisode, parseMovie, showFromPath } from './naming.js';
+import { isVideoFile, movieTitleFromPath, parseEpisode, parseMovie, showFromFileName, showFromPath } from './naming.js';
 import { getDefaultTmdbKey, isTmdbConfigured } from '../tmdb-config.js';
 
 function newItemId() {
@@ -70,7 +70,7 @@ function scanFiles(lib, rootPath, files, insert, now) {
         skippedMovies++;
         continue;
       }
-      showTitle = showFromPath(filePath, rootPath);
+      showTitle = showFromPath(filePath, rootPath) || showFromFileName(fileName);
       if (ep) {
         season = ep.season;
         episode = ep.episode;
