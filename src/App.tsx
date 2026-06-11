@@ -372,7 +372,6 @@ export default function App() {
     return () => io.disconnect();
   }, [libTab, subColls.length, collVisible, current.id]);
 
-  const titles = isLibrary ? libAllTitles : children.filter((c) => !isColl(c));
   const looseInLib = children.filter((c) => !isColl(c));
 
   useEffect(() => {
@@ -525,6 +524,20 @@ export default function App() {
     setPath((p) => p.slice(0, i + 1));
     mainRef.current?.scrollTo(0, 0);
   }
+
+  /** Jump to the parent library's Collections tab (from inside any collection). */
+  function goToLibraryCollections() {
+    if (path.length < 2) return;
+    setView('grid');
+    setPath([tree.id, path[1]]);
+    setLibTab('collections');
+    setQuery('');
+    mainRef.current?.scrollTo(0, 0);
+  }
+
+  const parentLibrary =
+    path.length >= 2 ? (nodeByPath(tree, [tree.id, path[1]]) as OrbitNode | null) : null;
+  const insideCollection = !isLibrary && current.type === 'collection';
 
   function mutate(fn: (t: OrbitNode) => void) {
     const t = structuredClone(tree);
@@ -1199,6 +1212,15 @@ export default function App() {
             <div className={'topbar' + (compact ? ' topbar-compact' : '')}>
               {!compact && (
               <div className="crumbs">
+                {insideCollection && parentLibrary && (
+                  <>
+                    <button type="button" className="crumb crumb-back" onClick={goToLibraryCollections}>
+                      {I.stack({})}
+                      Collections
+                    </button>
+                    <span className="crumb-sep">›</span>
+                  </>
+                )}
                 {crumbs.map((c, i) => (
                   <span key={c.id} style={{ display: 'contents' }}>
                     {i > 0 && <span className="crumb-sep">›</span>}
@@ -1575,35 +1597,35 @@ export default function App() {
                   </section>
                 ) : (
                   <>
-                    {subColls.length > 0 && (
+                    {children.length > 0 ? (
                       <section className="section rise" style={{ animationDelay: '.05s' }}>
                         <div className="section-head">
-                          <h2>Inside this system</h2>
-                          <span className="count">{subColls.length}</span>
+                          <h2>In this collection</h2>
+                          <span className="count">{children.length}</span>
+                          <button type="button" className="add-row" onClick={toggleCurate}>
+                            {I.spark({})}Curate order
+                          </button>
                         </div>
-                        <div className="grid colls">
-                          {subColls.map((n) => (
-                            <CollectionCard key={n.id} node={n} onOpen={go} onEditArt={editCollArt} onMenu={openCollectionMenu} />
-                          ))}
+                        <div className="grid titles collection-mixed">
+                          {children.map((n) =>
+                            isColl(n) ? (
+                              <CollectionCard
+                                key={n.id}
+                                node={n}
+                                onOpen={go}
+                                onEditArt={editCollArt}
+                                onMenu={openCollectionMenu}
+                                variant="grid"
+                              />
+                            ) : (
+                              <TitleCard key={n.id} node={n} onOpen={openTitle} onEditArt={openEditArt} onMenu={openTitleMenu} />
+                            ),
+                          )}
                         </div>
                       </section>
+                    ) : (
+                      <div className="empty">This collection is empty. Hit Curate to start adding.</div>
                     )}
-
-                    {(titles?.length || 0) > 0 && (
-                      <section className="section rise" style={{ animationDelay: '.1s' }}>
-                        <div className="section-head">
-                          <h2>{subColls.length ? 'Loose titles' : 'Titles'}</h2>
-                          <span className="count">{titles?.length || 0}</span>
-                        </div>
-                        <div className="grid titles">
-                          {(titles || []).map((n) => (
-                            <TitleCard key={n.id} node={n} onOpen={openTitle} onEditArt={openEditArt} onMenu={openTitleMenu} />
-                          ))}
-                        </div>
-                      </section>
-                    )}
-
-                    {!subColls.length && !titles?.length && <div className="empty">This collection is empty. Hit Curate to start adding.</div>}
                   </>
                 )}
               </>

@@ -308,8 +308,8 @@ export function SettingsView({
             </label>
             <label className="settings-row check">
               <span>
-                <strong>Auto collections</strong>
-                <small>Group library titles into decade and genre collections automatically</small>
+                <strong>Auto decade/genre collections</strong>
+                <small>Off by default. For Iron Man, MCU, etc. use Curate → Add → Search → Build franchise</small>
               </span>
               <input
                 type="checkbox"

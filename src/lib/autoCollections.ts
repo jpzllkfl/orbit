@@ -10,7 +10,26 @@ function decadeLabel(year: number) {
   return `${d}s`;
 }
 
-/** Group titles into decade (+ genre) collections inside a library. */
+/** Remove auto-generated decade/genre shells and keep their titles loose in the library. */
+export function stripAutoCollectionsFromNode(node: OrbitNode): OrbitNode {
+  const kids = (node.children || []).flatMap((ch) => {
+    if (ch.type === 'collection' && ch.auto) {
+      return ch.children || [];
+    }
+    if (ch.children?.length) {
+      return [{ ...ch, children: stripAutoCollectionsFromNode(ch).children }];
+    }
+    return [ch];
+  });
+  return { ...node, children: kids };
+}
+
+export function stripAutoCollectionsFromTree(root: OrbitNode): OrbitNode {
+  if (loadSettings().library.autoCollections) return root;
+  return stripAutoCollectionsFromNode(root);
+}
+
+/** Optional decade/genre grouping — off by default; franchises are built manually. */
 export function applyAutoCollectionsToLibrary(lib: OrbitNode): OrbitNode {
   if (!loadSettings().library.autoCollections) return lib;
   const titles = (lib.children || []).filter((c) => c.type === 'movie' || c.type === 'show');
@@ -78,9 +97,10 @@ export function applyAutoCollectionsToLibrary(lib: OrbitNode): OrbitNode {
 }
 
 export function decorateOmsLibraries(root: OrbitNode): OrbitNode {
+  const stripped = stripAutoCollectionsFromTree(root);
   return {
-    ...root,
-    children: (root.children || []).map((ch) =>
+    ...stripped,
+    children: (stripped.children || []).map((ch) =>
       ch.type === 'library' && ch.omsLibraryId ? applyAutoCollectionsToLibrary(ch) : ch,
     ),
   };

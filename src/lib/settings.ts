@@ -56,7 +56,7 @@ export const DEFAULT_SETTINGS: OrbitSettings = {
   library: {
     defaultTab: 'recommended',
     initialGridBatch: 36,
-    autoCollections: true,
+    autoCollections: false,
     instantPosters: true,
   },
   hero: {

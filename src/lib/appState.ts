@@ -1,6 +1,7 @@
 import type { OrbitNode } from '../types/orbit';
 import ORBIT_DATA from './data.js';
 import { Conn } from './conn.ts';
+import { stripAutoCollectionsFromTree } from './autoCollections.ts';
 import { plexIsConfigured, seedArtFromPlex, treeHasContent, treeHasLibraries } from './importUtils.ts';
 
 export { treeHasContent, treeHasLibraries, plexIsConfigured };
@@ -34,9 +35,9 @@ export function demoAppState(): { tree: OrbitNode; path: string[] } {
 }
 
 function hydrateLoadedTree(saved: OrbitNode) {
-  // Seed URL cache from persisted tree so posters show without TMDB round-trips.
-  seedArtFromPlex(saved);
-  cached = { tree: saved, path: [saved.id] };
+  const tree = stripAutoCollectionsFromTree(saved);
+  seedArtFromPlex(tree);
+  cached = { tree, path: [tree.id] };
   return cached;
 }
 

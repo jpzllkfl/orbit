@@ -240,7 +240,10 @@ html.orbit-reduce-motion .coll-card { transition: none !important; transform: no
 }
 .crumb:hover { color: var(--text); }
 .crumb.cur { color: var(--text); font-weight: 600; }
+.crumb-back { color: var(--cool); font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+.crumb-back svg { width: 14px; height: 14px; }
 .crumb-sep { color: var(--muted); opacity: .5; }
+.grid.collection-mixed { grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); }
 .topbar-spacer { flex: 1; }
 
 .search {
