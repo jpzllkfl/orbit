@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type SVGProps } from 'react';
 import { Plex, Progress } from '../lib';
 import { attachHlsSource, videoHasDecodedAudio, type HlsHandle } from '../lib/hlsPlayer';
+import { canReachOmsPlayback, omsPlaybackId } from '../lib/omsPlayback';
 import { bindBoundsSync, hasNativePlayer, nativePlayerInfo, videoBounds } from '../lib/nativePlayer';
 import { loadSettings } from '../lib/settings';
 import type { Episode, OrbitNode } from '../types/orbit';
@@ -120,7 +121,7 @@ function shouldResume() {
 }
 
 async function mediaStream(node: OrbitNode, q: string, episode?: Episode | null) {
-  const omsId = episode?.omsItemId || node.omsItemId;
+  const omsId = omsPlaybackId(node, episode);
   if (omsId) {
     const { omsStreamUrl, omsTranscodeUrl } = await import('../lib/importLibraryFromOms');
     return {
@@ -186,7 +187,8 @@ export function VideoPlayer({
   const [subs, setSubs] = useState(false);
   const [scrubbing, setScrubbing] = useState(false);
   const [hoverX, setHoverX] = useState<number | null>(null);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const omsPlaybackRef = useRef(false);
   const [playNode, setPlayNode] = useState<OrbitNode | null>(null);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const srcIdx = useRef(0);
@@ -202,7 +204,7 @@ export function VideoPlayer({
   const inElectron = hasNativePlayer();
   const [nativeCheckDone, setNativeCheckDone] = useState(!inElectron);
   const [nativeMode, setNativeMode] = useState(false);
-  const [nativeMissing, setNativeMissing] = useState(false);
+  const [, setNativeMissing] = useState(false);
 
   const label = episode ? `${node.title} · S${episode.season} E${episode.n}` : node.title;
 
@@ -218,16 +220,50 @@ export function VideoPlayer({
   useEffect(() => {
     if (!nativeMode) return;
     let alive = true;
-    setError(false);
+    setError(null);
     setWaiting(true);
     setReady(false);
     setQuality(NATIVE_QUALITY);
 
     const nativeStall = window.setTimeout(() => {
       if (alive) setNativeMode(false);
-    }, 20000);
+    }, 12000);
 
     (async () => {
+      const omsId = omsPlaybackId(node, episode);
+      if (omsId) {
+        omsPlaybackRef.current = true;
+        if (!canReachOmsPlayback()) {
+          setError(
+            'This library was scanned on your desktop. Open Orbit on the Plex PC, or use the same network with desktop streaming enabled.',
+          );
+          setWaiting(false);
+          setNativeMode(false);
+          return;
+        }
+        const info = await mediaStream(node, 'auto', episode);
+        if (!alive) return;
+        if (!info.url || !window.orbitNative) {
+          setNativeMode(false);
+          return;
+        }
+        const rec = Progress.get(node, episode || null);
+        const startSec = shouldResume() && rec?.t && rec.t > 12 ? rec.t : 0;
+        const bounds = videoBounds(vref.current);
+        try {
+          await window.orbitNative.play({ url: info.url, startSec, bounds: bounds || undefined });
+          if (!alive) return;
+          window.clearTimeout(nativeStall);
+          setWaiting(false);
+          setReady(true);
+          setPlaying(true);
+        } catch {
+          if (!alive) return;
+          setNativeMode(false);
+        }
+        return;
+      }
+
       let pn: OrbitNode = node;
       if (Plex.connected && (node.plexKey || node.partKey)) {
         const resolved = await Plex.resolvePlayback(node, episode || null);
@@ -314,24 +350,33 @@ export function VideoPlayer({
     if (!nativeCheckDone || nativeMode) return;
     setPlayNode(null);
     setStreamUrl(null);
-    setError(false);
+    setError(null);
     setReady(false);
     setWaiting(true);
     srcIdx.current = 0;
     triedFallback.current = false;
     qualityFallbackIdx.current = 0;
     streamFallback.current = null;
+    omsPlaybackRef.current = false;
     plexKeyRef.current = node.plexKey;
     playNodeRef.current = null;
 
     (async () => {
       let pn: OrbitNode = node;
-      const omsId = episode?.omsItemId || node.omsItemId;
+      const omsId = omsPlaybackId(node, episode);
       if (omsId) {
+        omsPlaybackRef.current = true;
+        if (!canReachOmsPlayback()) {
+          setError(
+            'This library was scanned on your desktop. Open Orbit on the Plex PC to play files, or enable desktop streaming on the same network.',
+          );
+          setWaiting(false);
+          return;
+        }
         const info = await mediaStream(node, 'auto', episode);
         if (!alive) return;
         if (!info.url) {
-          setError(true);
+          setError('Could not build a stream URL for this title.');
           setWaiting(false);
           return;
         }
@@ -351,7 +396,7 @@ export function VideoPlayer({
           setPlayNode(resolved);
           plexKeyRef.current = (resolved as OrbitNode & { playbackKey?: string }).playbackKey || resolved.plexKey;
         } else if (!node.plexKey) {
-          setError(true);
+          setError('Could not resolve this episode in Plex.');
           setWaiting(false);
           return;
         }
@@ -370,7 +415,7 @@ export function VideoPlayer({
       }
       if (!alive) return;
       if (!url) {
-        setError(true);
+        setError('No playback source found. Connect Plex for artwork or add this title to Orbit Media Server.');
         setWaiting(false);
         return;
       }
@@ -391,18 +436,28 @@ export function VideoPlayer({
       const pn = playNodeRef.current;
 
       if (fb && !triedFallback.current) {
-        if (!fb.includes('.m3u8') && pn && !Plex.canDirectPlayInBrowser(pn)) {
+        if (!fb.includes('.m3u8') && pn && !omsPlaybackRef.current && !Plex.canDirectPlayInBrowser(pn)) {
           /* skip unusable direct-play fallback */
         } else {
           triedFallback.current = true;
           streamFallback.current = null;
-          setError(false);
+          setError(null);
           setWaiting(true);
           setReady(false);
           streamModeRef.current = fb.includes('.m3u8') ? 'transcode' : 'direct';
           setStreamUrl(fb);
           return;
         }
+      }
+
+      if (omsPlaybackRef.current) {
+        setError(
+          streamModeRef.current === 'transcode' || fb?.includes('.m3u8')
+            ? 'Transcode failed. Install ffmpeg on this PC (winget install ffmpeg) or use Orbit Desktop with mpv.'
+            : 'Could not stream this file from Orbit Media Server. Check that the file still exists on disk.',
+        );
+        setWaiting(false);
+        return;
       }
 
       if (pn && Plex.connected) {
@@ -418,7 +473,7 @@ export function VideoPlayer({
           if (info.url) {
             streamFallback.current = info.fallbackUrl || null;
             streamModeRef.current = 'transcode';
-            setError(false);
+            setError(null);
             setWaiting(true);
             setReady(false);
             setQuality(QUALITIES.find((q) => q.id === qid) || QUALITIES[2]);
@@ -433,7 +488,7 @@ export function VideoPlayer({
           if (direct) {
             streamModeRef.current = 'direct';
             streamFallback.current = null;
-            setError(false);
+            setError(null);
             setWaiting(true);
             setReady(false);
             setQuality(QUALITIES[0]);
@@ -443,7 +498,7 @@ export function VideoPlayer({
         }
       }
 
-      setError(true);
+      setError('Playback failed. Try another quality or open this title on your Orbit desktop app.');
       setWaiting(false);
     })();
   };
@@ -469,7 +524,15 @@ export function VideoPlayer({
       onFatalError: () => onStreamFailRef.current(),
     });
 
-    const stallMs = streamUrl.includes('.m3u8') ? 45000 : streamFallback.current ? 2500 : 12000;
+    const stallMs = streamUrl.includes('.m3u8')
+      ? 45000
+      : omsPlaybackRef.current
+        ? streamFallback.current
+          ? 10000
+          : 15000
+        : streamFallback.current
+          ? 2500
+          : 12000;
     const stallTimer = window.setTimeout(() => {
       if (!v.error && v.currentTime < 0.5 && v.readyState < 2) onStreamFailRef.current();
     }, stallMs);
@@ -526,7 +589,7 @@ export function VideoPlayer({
         v.load();
         v.play().then(() => setPlaying(true)).catch(() => {});
       } else {
-        setError(true);
+        setError('The video stream could not be decoded in the browser.');
         setWaiting(false);
       }
     };
@@ -801,7 +864,6 @@ export function VideoPlayer({
 
   const pct = dur ? (cur / dur) * 100 : 0;
   const bufPct = dur ? (buffered / dur) * 100 : 0;
-  const usingPlex = Plex.connected && !!(playNode?.plexKey || node.plexKey);
   const qualityOptions = nativeMode ? [NATIVE_QUALITY] : QUALITIES;
 
   return (
@@ -817,15 +879,7 @@ export function VideoPlayer({
             <div className="disp" style={{ fontSize: 22 }}>
               Stream unavailable
             </div>
-            <p>
-              {usingPlex
-                ? streamModeRef.current === 'transcode' || streamUrl?.includes('.m3u8')
-                  ? 'Plex could not transcode this title. Check that your server allows remote streaming, then try again.'
-                  : nativeMissing
-                    ? 'Install mpv for native playback (AC3/DTS/HEVC). Run: winget install mpv — then restart Orbit Desktop.'
-                    : 'Could not load this stream from Plex.'
-                : 'The sample stream could not load. Connect Plex to play your library.'}
-            </p>
+            <p>{error || 'Playback failed.'}</p>
             <button onClick={onClose}>Close player</button>
           </div>
         </div>

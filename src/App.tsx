@@ -25,6 +25,7 @@ import { isTitleInLibrary, matchPartsToLibrary } from './lib/franchiseMatch';
 import { enrichTreeFromPlex } from './lib/enrichFromPlex';
 import { shouldImportPlexLibraries } from './lib/plexMetadataMode';
 import { maybeAutoScanOms } from './lib/omsAutoScan';
+import { resolveEpisodeOmsId } from './lib/omsPlayback';
 import { applyFranchiseCollectionsToTree } from './lib/tmdbFranchiseCollections';
 import { invalidateTitleIndex, searchTitles, similarTitles, sortedTitlesForScope, titleNodes } from './lib/treeIndex';
 import { preloadKnownPosters } from './lib/posterPreload';
@@ -1116,16 +1117,17 @@ export default function App() {
     mainRef.current?.scrollTo(0, 0);
   }
 
-  function playTitle(node: OrbitNode, episode?: Episode | null) {
+  async function playTitle(node: OrbitNode, episode?: Episode | null) {
     const full = OT.findById(tree, node.id) || node;
-    if (full.type === 'show' && !episode) {
+    let ep: Episode | null = episode || null;
+    if (full.type === 'show' && !ep) {
       const cw = Progress.list().find((r) => r.node.id === full.id && r.episode);
-      if (cw?.episode) {
-        setPlayer({ node: full, episode: cw.episode as Episode });
-        return;
-      }
+      if (cw?.episode) ep = cw.episode as Episode;
     }
-    setPlayer({ node: full, episode: episode || null });
+    if (full.type === 'show' && ep) {
+      ep = await resolveEpisodeOmsId(full, ep);
+    }
+    setPlayer({ node: full, episode: ep });
   }
 
   const handlePlayNext = useCallback(async () => {

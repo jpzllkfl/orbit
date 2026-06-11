@@ -576,12 +576,14 @@ export function DetailView({
 
   const resumeEp = useMemo(() => {
     if (!isShow) return null;
-    const epsAll = plexLeaves?.length
-      ? plexLeaves.map(leafToEpisode)
-      : Array.from({ length: node.seasons || 1 }).flatMap((_, si) => {
-          const s = si + 1;
-          return Meta.episodes(node, s).map((ep) => ({ ...ep, season: s }));
-        });
+    const epsAll = seasonEps?.length
+      ? seasonEps
+      : plexLeaves?.length
+        ? plexLeaves.map(leafToEpisode)
+        : Array.from({ length: node.seasons || 1 }).flatMap((_, si) => {
+            const s = si + 1;
+            return Meta.episodes(node, s).map((ep) => ({ ...ep, season: s }));
+          });
     const inProgress = epsAll.find((ep) => {
       const r = Progress.get(node, ep);
       return r && r.pct && r.pct > 0.01 && r.pct < 0.97;
@@ -589,7 +591,7 @@ export function DetailView({
     if (inProgress) return { ...inProgress, showTitle: node.title };
     const unwatched = epsAll.find((ep) => !Progress.get(node, ep));
     return unwatched ? { ...unwatched, showTitle: node.title } : firstEp ? { ...firstEp, showTitle: node.title } : null;
-  }, [isShow, node, firstEp, plexLeaves]);
+  }, [isShow, node, firstEp, plexLeaves, seasonEps]);
 
   const showSeasons = tmdb?.seasons || plexMeta?.seasons || node.seasons;
   const movieRuntime = meta?.runtime || node.runtime || (node.duration ? Math.round(node.duration / 60000) : null);
