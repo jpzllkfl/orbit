@@ -138,6 +138,19 @@ export const OrbitMedia = {
     });
   },
 
+  async manualMatch(opts: {
+    libraryId: string;
+    tmdbId: number;
+    mediaType: 'movie' | 'tv';
+    showTitle?: string;
+    itemId?: string;
+  }): Promise<{ ok: boolean; matched: number; showTitle?: string; tmdbId?: number }> {
+    return api('/match/manual', {
+      method: 'POST',
+      body: JSON.stringify(opts),
+    });
+  },
+
   async showSeasons(libraryId: string, showTitle: string): Promise<Array<{ season: number; title: string; episodes: number }>> {
     const q =
       '?libraryId=' +
@@ -148,6 +161,19 @@ export const OrbitMedia = {
       '/shows/seasons' + q,
     );
     return seasons;
+  },
+
+  async deleteItem(itemId: string): Promise<{ ok: boolean; libraryId: string; itemCount: number }> {
+    return api('/items/' + encodeURIComponent(itemId), { method: 'DELETE' });
+  },
+
+  async deleteShow(libraryId: string, showTitle: string): Promise<{ ok: boolean; deleted: number; itemCount: number }> {
+    const q =
+      '?libraryId=' +
+      encodeURIComponent(libraryId) +
+      '&show=' +
+      encodeURIComponent(showTitle);
+    return api('/shows' + q, { method: 'DELETE' });
   },
 
   async showEpisodes(

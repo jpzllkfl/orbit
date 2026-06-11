@@ -4,7 +4,8 @@ import { mediaStats } from './db.js';
 import { addLibrary, addLibraryFolder, getLibrary, listLibraries, removeLibrary, removeLibraryFolder, updateLibrary, wipeAllLibraries } from './libraries.js';
 import { listShowEpisodes, listShowSeasons } from './episodes.js';
 import { buildOrbitTreeFromOms } from './importTree.js';
-import { matchAllLibraries, matchLibrary, matchMediaItem, matchShowByTitle } from './matcher.js';
+import { applyManualMatch, matchAllLibraries, matchLibrary, matchMediaItem, matchShowByTitle } from './matcher.js';
+import { deleteMediaItem, deleteShowByTitle } from './items.js';
 import { listItems, scanLibrary } from './scanner.js';
 import { DEFAULT_OMS_LIBRARIES } from './catalog.js';
 import { scanAllLibraries, seedDefaultLibraries } from './seed.js';
@@ -93,6 +94,20 @@ export function createMediaRouter() {
       res.json({ ok: true, ...result });
     } catch (e) {
       res.status(400).json({ error: e.message || 'Match failed.' });
+    }
+  });
+
+  router.post('/match/manual', async (req, res) => {
+    const { tmdbKey, libraryId, showTitle, itemId, tmdbId, mediaType } = req.body || {};
+    const key = resolveTmdbKey(tmdbKey);
+    try {
+      const result = await applyManualMatch(
+        { libraryId, showTitle, itemId, tmdbId, mediaType },
+        key,
+      );
+      res.json({ ok: true, ...result });
+    } catch (e) {
+      res.status(400).json({ error: e.message || 'Manual match failed.' });
     }
   });
 
@@ -254,6 +269,20 @@ export function createMediaRouter() {
     if (!lib) return res.status(404).json({ error: 'Library not found.' });
     const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
     res.json({ items: listItems(req.params.id, limit) });
+  });
+
+  router.delete('/items/:id', (req, res) => {
+    const result = deleteMediaItem(req.params.id);
+    if (!result) return res.status(404).json({ error: 'Item not found.' });
+    res.json({ ok: true, ...result });
+  });
+
+  router.delete('/shows', (req, res) => {
+    const libraryId = String(req.query.libraryId || '');
+    const show = String(req.query.show || '');
+    const result = deleteShowByTitle(libraryId, show);
+    if (!result) return res.status(404).json({ error: 'Show not found.' });
+    res.json({ ok: true, ...result });
   });
 
   router.post('/libraries/:id/scan', async (req, res) => {

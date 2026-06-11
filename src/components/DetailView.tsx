@@ -93,6 +93,17 @@ const ic = {
       <circle cx="17" cy="16" r="3" stroke="currentColor" strokeWidth="1.7" />
     </svg>
   ),
+  trash: (p: SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="none" {...p}>
+      <path d="M4 7h16M9 7V5h6v2M7 7l1 12h8l1-12" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  link: (p: SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="none" {...p}>
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M2.5 12h19M12 2.5a15.3 15.3 0 010 19M12 2.5a15.3 15.3 0 000 19" stroke="currentColor" strokeWidth="1.7" />
+    </svg>
+  ),
 };
 
 function nameHue(name: string) {
@@ -191,7 +202,10 @@ export function DetailView({
   onClose,
   onPlay,
   onEditArt,
+  onFixMatch,
   onOpenNode,
+  onRemoveFromLibrary,
+  onDeleteEpisode,
 }: {
   node: OrbitNode;
   similar?: OrbitNode[];
@@ -200,7 +214,10 @@ export function DetailView({
   onClose: () => void;
   onPlay: (node: OrbitNode, episode?: Episode | null) => void;
   onEditArt?: (focus: 'both' | 'backdrop') => void;
+  onFixMatch?: () => void;
   onOpenNode: (n: OrbitNode) => void;
+  onRemoveFromLibrary?: () => void;
+  onDeleteEpisode?: (ep: Episode) => void;
 }) {
   const art = useArt(node);
   const md = (Meta.get(node) || {}) as TitleMeta;
@@ -665,6 +682,16 @@ export function DetailView({
                   {ic.stack({})}
                 </button>
               )}
+              {onFixMatch && (
+                <button className="dt-iconbtn" onClick={onFixMatch} title={node.tmdbId || node.poster ? 'Fix match' : 'Match to TMDB'}>
+                  {ic.link({})}
+                </button>
+              )}
+              {onRemoveFromLibrary && (
+                <button className="dt-iconbtn" onClick={onRemoveFromLibrary} title="Remove from library">
+                  {ic.trash({})}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -811,9 +838,15 @@ export function DetailView({
                 <button
                   key={ep.n}
                   className="dt-ep"
+                  title={ep.omsItemId && onDeleteEpisode ? 'Right-click to remove from library' : undefined}
                   onClick={() => {
                     stopTheme();
                     onPlay(node, { ...ep, showTitle: node.title });
+                  }}
+                  onContextMenu={(e) => {
+                    if (!ep.omsItemId || !onDeleteEpisode) return;
+                    e.preventDefault();
+                    onDeleteEpisode(ep);
                   }}
                 >
                   <div className="dt-ep-thumb">

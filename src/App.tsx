@@ -28,9 +28,17 @@ import { syncWatchStateFromPlex } from './lib/plexWatchSync';
 import { newId, resultToNode } from './lib/nodeFactory';
 import { ContextMenu, type ContextMenuItem } from './components/ContextMenu';
 import { TitleInfoModal } from './components/TitleInfoModal';
+import { FixMatchModal, type FixMatchPick } from './components/FixMatchModal';
 import { OrbitMedia } from './lib/orbitMedia';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { deleteOrbitLibrary } from './lib/deleteOrbitLibrary';
+import {
+  deleteConfirmMessage,
+  deleteConfirmTitle,
+  deleteEpisodeFromLibrary,
+  deleteFromLibrary,
+  EPISODE_DELETE_MESSAGE,
+} from './lib/deleteFromLibrary';
 import { mergeCollectionsInTree, moveNodeInTree, removeNodeFromTree } from './lib/treeMutations';
 import { idPath, isColl, nodeByPath, sortByTitle } from './lib/treeUtils';
 import type { OrbitUser } from './lib/orbitAccount';
@@ -86,6 +94,10 @@ export default function App() {
   const [libDropId, setLibDropId] = useState<string | null>(null);
   const [libDeleteTarget, setLibDeleteTarget] = useState<OrbitNode | null>(null);
   const [libDeleteBusy, setLibDeleteBusy] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<OrbitNode | null>(null);
+  const [episodeDelete, setEpisodeDelete] = useState<{ show: OrbitNode; ep: Episode } | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [detailRefresh, setDetailRefresh] = useState(0);
   const [collVisible, setCollVisible] = useState(24);
   const libMoreRef = useRef<HTMLDivElement>(null);
   const collMoreRef = useRef<HTMLDivElement>(null);
@@ -106,6 +118,7 @@ export default function App() {
   const [mergeDest, setMergeDest] = useState<OrbitNode | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; node: OrbitNode } | null>(null);
   const [infoNode, setInfoNode] = useState<OrbitNode | null>(null);
+  const [fixMatchNode, setFixMatchNode] = useState<OrbitNode | null>(null);
   const [addToCollFor, setAddToCollFor] = useState<OrbitNode | null>(null);
   const archive = ORBIT_DATA.ARCHIVE;
   const [drag, setDrag] = useState<OrbitNode | null>(null);
@@ -551,6 +564,60 @@ export default function App() {
     mutate((t) => removeNodeFromTree(t, id));
   }
 
+  function requestCurateRemove(node: OrbitNode) {
+    const par = OT.findParent(tree, node.id);
+    if (par?.type === 'collection' && (node.type === 'movie' || node.type === 'show')) {
+      removeNode(node.id);
+      return;
+    }
+    if (node.type === 'collection') {
+      removeNode(node.id);
+      return;
+    }
+    setDeleteTarget(node);
+  }
+
+  async function confirmDeleteFromLibrary() {
+    if (episodeDelete) {
+      const { ep } = episodeDelete;
+      if (!ep.omsItemId) return;
+      setDeleteBusy(true);
+      try {
+        await deleteEpisodeFromLibrary(ep.omsItemId);
+        setEpisodeDelete(null);
+        setDetailRefresh((v) => v + 1);
+        setVer((v) => v + 1);
+      } catch (e) {
+        window.alert(e instanceof Error ? e.message : 'Could not remove episode');
+      } finally {
+        setDeleteBusy(false);
+      }
+      return;
+    }
+
+    const node = deleteTarget;
+    if (!node) return;
+    setDeleteBusy(true);
+    try {
+      const merged = await deleteFromLibrary(tree, node);
+      await TreeStore.saveImmediate(merged);
+      setTree(merged);
+      resetAppStateCache(false);
+      invalidateTitleIndex();
+      setVer((v) => v + 1);
+      if (detail?.id === node.id) setDetail(null);
+      if (path.includes(node.id)) {
+        const idx = path.indexOf(node.id);
+        setPath(idx > 0 ? path.slice(0, idx) : [merged.id]);
+      }
+      setDeleteTarget(null);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Could not remove from library');
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
   async function confirmDeleteSidebarLibrary() {
     const lb = libDeleteTarget;
     if (!lb) return;
@@ -678,6 +745,80 @@ export default function App() {
     }
   }
 
+  function findNodeAfterOmsSync(root: OrbitNode, prev: OrbitNode, tmdbId?: number): OrbitNode | null {
+    const stack: OrbitNode[] = [root];
+    while (stack.length) {
+      const n = stack.pop()!;
+      if (prev.type === 'show' && n.type === 'show' && n.omsLibraryId === prev.omsLibraryId) {
+        if (tmdbId && n.tmdbId === tmdbId) return n;
+        if (n.omsShowTitle === prev.omsShowTitle) return n;
+      }
+      if (prev.omsItemId && n.omsItemId === prev.omsItemId) return n;
+      if (n.children) stack.push(...n.children);
+    }
+    return OT.findById(root, prev.id);
+  }
+
+  async function confirmManualMatch(node: OrbitNode, pick: FixMatchPick) {
+    const hasOms = !!(node.omsLibraryId && (node.omsItemId || node.omsShowTitle));
+    if (hasOms && node.omsLibraryId) {
+      await OrbitMedia.manualMatch({
+        libraryId: node.omsLibraryId,
+        tmdbId: pick.tmdbId,
+        mediaType: pick.type === 'show' ? 'tv' : 'movie',
+        showTitle: node.type === 'show' ? node.omsShowTitle : undefined,
+        itemId: node.omsItemId,
+      });
+      const { syncOmsTreeFromHome } = await import('./lib/omsSync');
+      const merged = await syncOmsTreeFromHome(tree, { force: true });
+      if (merged) {
+        setTree(merged);
+        invalidateTitleIndex();
+        setVer((v) => v + 1);
+        if (detail) {
+          const updated = findNodeAfterOmsSync(merged, detail, pick.tmdbId);
+          if (updated) setDetail(updated);
+        }
+        setDetailRefresh((v) => v + 1);
+      }
+      return;
+    }
+
+    mutate((t) => {
+      const n = OT.findById(t, node.id);
+      if (!n) return;
+      n.tmdbId = pick.tmdbId;
+      n.title = pick.title;
+      if (pick.year) n.year = pick.year;
+      if (pick.genre) n.genre = pick.genre;
+      if (pick.poster) n.poster = pick.poster;
+      if (pick.backdrop) n.backdrop = pick.backdrop;
+      if (pick.overview) n.blurb = pick.overview.slice(0, 240);
+    });
+    Lib.seed(node, pick);
+    if (detail?.id === node.id) {
+      setDetail((d) =>
+        d && d.id === node.id
+          ? {
+              ...d,
+              tmdbId: pick.tmdbId,
+              title: pick.title,
+              year: pick.year || d.year,
+              genre: pick.genre || d.genre,
+              poster: pick.poster || d.poster,
+              backdrop: pick.backdrop || d.backdrop,
+              blurb: pick.overview ? pick.overview.slice(0, 240) : d.blurb,
+            }
+          : d,
+      );
+      setDetailRefresh((v) => v + 1);
+    }
+  }
+
+  function fixMatchLabel(node: OrbitNode) {
+    return node.tmdbId || node.poster ? 'Fix match…' : 'Match…';
+  }
+
   function buildCtxItems(node: OrbitNode): ContextMenuItem[] {
     const par = OT.findParent(tree, node.id);
     const inCollection = par?.type === 'collection';
@@ -705,6 +846,16 @@ export default function App() {
             void refreshTitleMetadata(node);
           },
         },
+        ...(Lib.connected
+          ? [{
+              label: fixMatchLabel(node),
+              icon: I.globe({}),
+              onClick: () => {
+                setCtxMenu(null);
+                setFixMatchNode(node);
+              },
+            }]
+          : []),
         { label: 'Get info', icon: I.doc({}), onClick: () => { setCtxMenu(null); setInfoNode(node); } },
         { label: 'Edit artwork', icon: I.image({}), onClick: () => { setCtxMenu(null); openEditArt(node); } },
         {
@@ -726,6 +877,15 @@ export default function App() {
               },
             }]
           : []),
+        {
+          label: 'Remove from library',
+          icon: I.trash({}),
+          danger: true,
+          onClick: () => {
+            setCtxMenu(null);
+            setDeleteTarget(node);
+          },
+        },
       ];
     }
 
@@ -735,17 +895,15 @@ export default function App() {
         { label: 'Edit poster', icon: I.image({}), onClick: () => { setCtxMenu(null); editCollArt(node); } },
         { label: 'Merge this away…', icon: I.stack({}), onClick: () => { setCtxMenu(null); openMerge(node); } },
         { label: 'Merge another into this…', icon: I.stack({}), onClick: () => { setCtxMenu(null); openMerge(undefined, node); } },
-        ...(par && par.id !== tree.id
-          ? [{
-              label: 'Remove',
-              icon: I.x({}),
-              danger: true,
-              onClick: () => {
-                setCtxMenu(null);
-                removeNode(node.id);
-              },
-            }]
-          : []),
+        {
+          label: 'Delete collection',
+          icon: I.trash({}),
+          danger: true,
+          onClick: () => {
+            setCtxMenu(null);
+            setDeleteTarget(node);
+          },
+        },
       ];
     }
 
@@ -1466,7 +1624,7 @@ export default function App() {
                                     onEditArt={editCollArt}
                                     onMenu={openCollectionMenu}
                                     onMerge={curating ? openMerge : undefined}
-                                    onRemove={curating ? (x) => removeNode(x.id) : undefined}
+                                    onRemove={curating ? requestCurateRemove : undefined}
                                   />
                                 ) : (
                                   <TitleCard
@@ -1477,7 +1635,7 @@ export default function App() {
                                     dnd={cardDnd(n)}
                                     onEditArt={openEditArt}
                                     onMenu={openTitleMenu}
-                                    onRemove={curating ? (x) => removeNode(x.id) : undefined}
+                                    onRemove={curating ? requestCurateRemove : undefined}
                                   />
                                 ),
                               )}
@@ -1531,7 +1689,7 @@ export default function App() {
                                 onEditArt={editCollArt}
                                 onMenu={openCollectionMenu}
                                 onMerge={openMerge}
-                                onRemove={curating ? (x) => removeNode(x.id) : undefined}
+                                onRemove={curating ? requestCurateRemove : undefined}
                               />
                             ))}
                             {!curating && collVisible < subColls.length && (
@@ -1576,7 +1734,7 @@ export default function App() {
                             onEditArt={editCollArt}
                             onMenu={openCollectionMenu}
                             onMerge={n.type === 'collection' ? openMerge : undefined}
-                            onRemove={(x) => removeNode(x.id)}
+                            onRemove={requestCurateRemove}
                           />
                         ) : (
                           <TitleCard
@@ -1587,7 +1745,7 @@ export default function App() {
                             dnd={cardDnd(n)}
                             onEditArt={openEditArt}
                             onMenu={openTitleMenu}
-                            onRemove={(x) => removeNode(x.id)}
+                            onRemove={requestCurateRemove}
                           />
                         ),
                       )}
@@ -1639,6 +1797,14 @@ export default function App() {
         )}
 
         {infoNode && <TitleInfoModal node={infoNode} onClose={() => setInfoNode(null)} />}
+
+        {fixMatchNode && (
+          <FixMatchModal
+            node={fixMatchNode}
+            onClose={() => setFixMatchNode(null)}
+            onConfirm={(pick) => confirmManualMatch(fixMatchNode, pick)}
+          />
+        )}
 
         <ModalHost
           tree={tree}
@@ -1697,6 +1863,7 @@ export default function App() {
           return (
             <Suspense fallback={null}>
             <DetailView
+              key={detail.id + ':' + detailRefresh}
               node={detail}
               similar={similar}
               parentTitle={parentTitle}
@@ -1704,6 +1871,9 @@ export default function App() {
               onClose={() => setDetail(null)}
               onPlay={(node, ep) => playTitle(node, ep)}
               onEditArt={(focus) => openEditArt(detail, focus)}
+              onFixMatch={Lib.connected ? () => setFixMatchNode(detail) : undefined}
+              onRemoveFromLibrary={() => setDeleteTarget(detail)}
+              onDeleteEpisode={(ep) => setEpisodeDelete({ show: detail, ep })}
               onOpenNode={(n) => {
                 if (isColl(n)) {
                   setDetail(null);
@@ -1749,6 +1919,28 @@ export default function App() {
         busy={libDeleteBusy}
         onCancel={() => !libDeleteBusy && setLibDeleteTarget(null)}
         onConfirm={() => void confirmDeleteSidebarLibrary()}
+      />
+
+      <ConfirmDialog
+        open={!!deleteTarget || !!episodeDelete}
+        title={
+          episodeDelete
+            ? `Remove S${episodeDelete.ep.season} · E${episodeDelete.ep.n}?`
+            : deleteTarget
+              ? deleteConfirmTitle(deleteTarget)
+              : 'Remove from library?'
+        }
+        message={
+          episodeDelete
+            ? EPISODE_DELETE_MESSAGE
+            : deleteTarget
+              ? deleteConfirmMessage(deleteTarget)
+              : ''
+        }
+        confirmLabel={deleteTarget?.type === 'collection' ? 'Delete collection' : 'Remove'}
+        busy={deleteBusy}
+        onCancel={() => !deleteBusy && (setDeleteTarget(null), setEpisodeDelete(null))}
+        onConfirm={() => void confirmDeleteFromLibrary()}
       />
     </ArtCtx.Provider>
   );

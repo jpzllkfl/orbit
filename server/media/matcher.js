@@ -222,3 +222,49 @@ export async function matchAllLibraries(apiKey, onProgress, opts = {}) {
   }
   return { matched: total, libraries: libs.length };
 }
+
+/** Apply a user-picked TMDB match to one movie or all episodes of a TV show. */
+export async function applyManualMatch(opts, apiKey) {
+  const libraryId = String(opts.libraryId || '');
+  const tmdbId = Number(opts.tmdbId);
+  if (!libraryId) throw new Error('libraryId required.');
+  if (!tmdbId) throw new Error('tmdbId required.');
+
+  const lib = getLibrary(libraryId);
+  if (!lib) throw new Error('Library not found.');
+
+  const mediaType = opts.mediaType === 'tv' || opts.mediaType === 'show' ? 'tv' : 'movie';
+  const kind = mediaType === 'tv' ? 'tv' : 'movie';
+  if (lib.type === 'movie' && kind === 'tv') throw new Error('Cannot match a TV show to a movie library.');
+  if (lib.type === 'tv' && kind === 'movie') throw new Error('Cannot match a movie to a TV library.');
+
+  const hit = await tmdbDetails(kind, tmdbId, apiKey);
+  if (!hit?.id) throw new Error('TMDB record not found.');
+
+  if (kind === 'movie') {
+    const itemId = String(opts.itemId || '');
+    if (!itemId) throw new Error('itemId required for movie match.');
+    const row = getDb()
+      .prepare(`SELECT id, library_id, title, year FROM media_items WHERE id = ? AND library_id = ?`)
+      .get(itemId, libraryId);
+    if (!row) throw new Error('Item not found in library.');
+    setItemTmdb(row.id, hit, row.title, row.year);
+    return { matched: 1, libraryId, itemId, tmdbId: hit.id };
+  }
+
+  let showTitle = (opts.showTitle || '').trim();
+  if (!showTitle && opts.itemId) {
+    const row = getDb()
+      .prepare(`SELECT show_title FROM media_items WHERE id = ? AND library_id = ?`)
+      .get(String(opts.itemId), libraryId);
+    showTitle = (row?.show_title || '').trim();
+  }
+  if (!showTitle) throw new Error('Show title required.');
+
+  const countRow = getDb()
+    .prepare(`SELECT COUNT(*) AS n FROM media_items WHERE library_id = ? AND show_title = ?`)
+    .get(libraryId, showTitle);
+  setShowTmdb(libraryId, showTitle, hit);
+  const canonical = hit.name || hit.title || showTitle;
+  return { matched: countRow?.n || 0, libraryId, showTitle: canonical, tmdbId: hit.id };
+}
