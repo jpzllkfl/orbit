@@ -409,9 +409,44 @@ window.OrbitPlex = (function () {
       backdrop: imgUrl(match.art) || imgUrl(match.thumb),
       theme: match.theme || null,
       tmdbId: tmdbIdFromGuid(match) || node.tmdbId || null,
+      title: match.title || null,
+      year: match.year ? Number(match.year) : null,
+      genre: (asList(match.Genre)[0] && asList(match.Genre)[0].tag) || null,
     };
     titleMetaCache.set(cacheKey, meta);
     return meta;
+  }
+
+  let collectionIndexCache = null;
+  let collectionIndexAt = 0;
+
+  async function buildCollectionIndex() {
+    if (collectionIndexCache && Date.now() - collectionIndexAt < 3600000) return collectionIndexCache;
+    const map = new Map();
+    const colls = await fetchCollections();
+    for (const c of colls) {
+      const key = normShowTitle(c.title);
+      if (!key) continue;
+      map.set(key, {
+        title: c.title,
+        plexKey: c.ratingKey,
+        poster: c.poster || c.art,
+        backdrop: c.backdrop || c.art,
+      });
+    }
+    collectionIndexCache = map;
+    collectionIndexAt = Date.now();
+    return map;
+  }
+
+  function findCollectionMetadata(node, index) {
+    if (!node || !index) return null;
+    const key = normShowTitle(node.title);
+    if (index.has(key)) return index.get(key);
+    for (const [k, v] of index.entries()) {
+      if (key.includes(k) || k.includes(key)) return v;
+    }
+    return null;
   }
 
   /** Theme for a show — uses plexKey, cached theme path, or Plex library search (OMS-only nodes). */
@@ -1024,7 +1059,15 @@ window.OrbitPlex = (function () {
       for (const col of colls) {
         let kids = [];
         try { const kj = await api('/library/metadata/' + col.ratingKey + '/children'); kids = (kj.MediaContainer && kj.MediaContainer.Metadata) || []; } catch (e) {}
-        out.push({ title: col.title, library: sec.title, art: imgUrl(col.thumb), items: kids.map(toTitle) });
+        out.push({
+          title: col.title,
+          library: sec.title,
+          ratingKey: String(col.ratingKey),
+          art: imgUrl(col.thumb),
+          poster: imgUrl(col.thumb),
+          backdrop: imgUrl(col.art),
+          items: kids.map(toTitle),
+        });
       }
     }
     return out;
@@ -1083,7 +1126,7 @@ window.OrbitPlex = (function () {
     // auth + discovery (real)
     createPin, authUrl, pollPin, signIn, resources, bestConnection, connectServer, restoreFromConnState,
     // library + media (real)
-    sections, buildTree, fetchCollections, img, imgUrl, mediaUrl, themeUrl, getThemeUrl, resolveShowTheme, findTitleMetadata, api, toTitle,
+    sections, buildTree, fetchCollections, buildCollectionIndex, findCollectionMetadata, img, imgUrl, mediaUrl, themeUrl, getThemeUrl, resolveShowTheme, findTitleMetadata, api, toTitle,
     fetchMetadata, fetchDetails, fetchSubtitleStreamUrl, resolvePlayback, pickShowEpisode, fetchSeasons, fetchShowLeaves, scrobble, unscrobble, reportProgress,
     fetchHomeHub, fetchContinueWatching, fetchOnDeck,
     sendTimeline, pingTranscodeSession, getPlaybackSession, startPlaybackSession, beginNewPlayback: startPlaybackSession, isLocalConnection,

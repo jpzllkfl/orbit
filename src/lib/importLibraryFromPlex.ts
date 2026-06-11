@@ -1,5 +1,6 @@
 import { Conn } from './conn.ts';
 import { countTitles, plexIsConfigured, treeHasContent } from './importUtils.ts';
+import { shouldImportPlexLibraries } from './plexMetadataMode.ts';
 import Plex from './plex.js';
 import { TreeStore } from './treeStore.ts';
 import type { OrbitNode } from '../types/orbit';
@@ -102,6 +103,7 @@ export async function allPlexSectionKeys(): Promise<string[] | undefined> {
 
 /** True when Plex has more libraries than the saved tree (e.g. after a partial sync). */
 export async function needsLibraryRepair(tree: OrbitNode): Promise<boolean> {
+  if (!shouldImportPlexLibraries(tree)) return false;
   if (!treeHasContent(tree) || !plexIsConfigured(Conn.load())) return false;
   const keys = await allPlexSectionKeys();
   if (!keys?.length) return false;
@@ -181,6 +183,7 @@ export async function importLibraryFromPlex(
 }
 
 export function needsPlexImport(tree: OrbitNode) {
+  if (!shouldImportPlexLibraries(tree)) return false;
   return plexIsConfigured(Conn.load()) && !treeHasContent(tree);
 }
 

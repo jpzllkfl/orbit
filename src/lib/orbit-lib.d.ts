@@ -148,7 +148,23 @@ export interface OrbitPlexClient {
   resolveShowTheme(node: OrbitNode): Promise<string | null>;
   findTitleMetadata?(
     node: OrbitNode,
-  ): Promise<{ plexKey?: string; poster?: string | null; backdrop?: string | null; theme?: string | null; tmdbId?: number | null } | null>;
+  ): Promise<{
+    plexKey?: string;
+    poster?: string | null;
+    backdrop?: string | null;
+    theme?: string | null;
+    tmdbId?: number | null;
+    title?: string | null;
+    year?: number | null;
+    genre?: string | null;
+  } | null>;
+  buildCollectionIndex?(): Promise<
+    Map<string, { title?: string; plexKey?: string; poster?: string | null; backdrop?: string | null }>
+  >;
+  findCollectionMetadata?(
+    node: OrbitNode,
+    index: Map<string, { title?: string; plexKey?: string; poster?: string | null; backdrop?: string | null }>,
+  ): { title?: string; plexKey?: string; poster?: string | null; backdrop?: string | null } | null;
   fetchMetadata(ratingKey: string): Promise<OrbitNode | null>;
   fetchDetails(ratingKey: string): Promise<{
     overview?: string;

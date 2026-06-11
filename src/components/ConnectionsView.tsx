@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Conn, Lib, OT, OrbitAccount, Plex } from '../lib';
 import { isDesktopApp } from '../lib/isDesktop';
+import { loadSettings, patchSettings } from '../lib/settings';
+import { plexMetadataOnly } from '../lib/plexMetadataMode';
 import { getHomeServer, isUsingRemoteHome, setHomeServer } from '../lib/orbitServer';
 import type { OrbitNode } from '../types/orbit';
 import type { UpdateStatus } from '../types/native';
@@ -25,6 +27,7 @@ export function ConnectionsView({
   onBump,
   onAccountChange,
   onOmsImport,
+  onSyncPlexMetadata,
 }: {
   tree: OrbitNode;
   onOpenWizard: () => void;
@@ -32,6 +35,7 @@ export function ConnectionsView({
   onBump?: () => void;
   onAccountChange?: () => void;
   onOmsImport?: (merged: OrbitNode) => void | Promise<void>;
+  onSyncPlexMetadata?: () => void | Promise<void>;
 }) {
   const conn = Conn.load();
   const libs = (tree.children || []).filter((n) => n.type === 'library');
@@ -40,6 +44,8 @@ export function ConnectionsView({
   const [orbitUser, setOrbitUser] = useState(() => OrbitAccount.user);
   const [accountModal, setAccountModal] = useState<'login' | 'register' | null>(null);
   const [syncBusy, setSyncBusy] = useState(false);
+  const [plexMetaBusy, setPlexMetaBusy] = useState(false);
+  const [plexMetaOnly, setPlexMetaOnly] = useState(() => plexMetadataOnly());
   const [lastCloudSync, setLastCloudSync] = useState<number | null>(null);
   const [homeUrl, setHomeUrl] = useState(() => getHomeServer());
   const [appVersion, setAppVersion] = useState('');
@@ -317,9 +323,49 @@ export function ConnectionsView({
                 </div>
               </dl>
               {plexLive && (
-                <p className="conns-p" style={{ marginTop: 8 }}>
-                  Live Plex library — imported via sign-in.
-                </p>
+                <div style={{ marginTop: 12 }}>
+                  <label className="settings-row check" style={{ marginBottom: 10 }}>
+                    <span>
+                      <strong>Plex for artwork &amp; metadata only</strong>
+                      <small>
+                        Orbit Media Server keeps your libraries and direct play. Plex supplies posters, themes, titles,
+                        and collection art — not your file list.
+                      </small>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={plexMetaOnly}
+                      onChange={(e) => {
+                        const on = e.target.checked;
+                        setPlexMetaOnly(on);
+                        patchSettings({ connections: { ...loadSettings().connections, plexMetadataOnly: on } });
+                      }}
+                    />
+                  </label>
+                  {plexMetaOnly ? (
+                    <p className="conns-p">
+                      Plex is linked for posters, themes, and collection artwork. Libraries come from Orbit Media Server.
+                    </p>
+                  ) : (
+                    <p className="conns-p">Plex can import full libraries into the sidebar (legacy mode).</p>
+                  )}
+                  <div className="conns-actions" style={{ marginTop: 10 }}>
+                    <button
+                      type="button"
+                      className="conns-btn sm"
+                      disabled={plexMetaBusy || !plexLive}
+                      onClick={() => {
+                        setPlexMetaBusy(true);
+                        Promise.resolve(onSyncPlexMetadata?.()).finally(() => {
+                          setPlexMetaBusy(false);
+                          onBump?.();
+                        });
+                      }}
+                    >
+                      {plexMetaBusy ? 'Syncing…' : 'Sync Plex artwork'}
+                    </button>
+                  </div>
+                </div>
               )}
             </>
           ) : (

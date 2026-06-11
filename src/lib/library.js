@@ -210,28 +210,31 @@ window.OrbitLib = (function () {
     };
   }
 
+  function preferPlexMetadata() {
+    try {
+      const raw = JSON.parse(localStorage.getItem('orbit.settings.v1') || 'null');
+      return raw?.connections?.plexMetadataOnly !== false;
+    } catch (e) { return true; }
+  }
+
   async function resolve(node) {
     if (!node || node.type === 'collection') return null;
     const k = ck(node);
-    if (cache[k]) {
+    if (cache[k] && cache[k].plex && preferPlexMetadata()) return cache[k].empty ? null : cache[k];
+    if (cache[k] && !preferPlexMetadata()) {
       if (cache[k].plex) return cache[k];
       return cache[k].empty ? null : cache[k];
     }
     const fromNode = artFromNode(node);
     if (fromNode?.poster || fromNode?.backdrop) {
-      cache[k] = fromNode;
-      saveCache();
-      return fromNode;
-    }
-    const plexPoster = plexPosterFor(node);
-    if (plexPoster) {
-      const data = { poster: plexPoster, backdrop: plexPoster, plex: true };
-      cache[k] = data;
-      saveCache();
-      return data;
+      if (!preferPlexMetadata()) {
+        cache[k] = fromNode;
+        saveCache();
+        return fromNode;
+      }
     }
     const Plex = window.OrbitPlex;
-    if (Plex?.connected && Plex.findTitleMetadata) {
+    if (Plex?.connected && Plex.findTitleMetadata && preferPlexMetadata()) {
       const plexMeta = await Plex.findTitleMetadata(node);
       if (plexMeta?.poster || plexMeta?.backdrop) {
         const data = {
@@ -244,6 +247,18 @@ window.OrbitLib = (function () {
         saveCache();
         return data;
       }
+    }
+    if (fromNode?.poster || fromNode?.backdrop) {
+      cache[k] = fromNode;
+      saveCache();
+      return fromNode;
+    }
+    const plexPoster = plexPosterFor(node);
+    if (plexPoster) {
+      const data = { poster: plexPoster, backdrop: plexPoster, plex: true };
+      cache[k] = data;
+      saveCache();
+      return data;
     }
     if (inflight.has(k)) return inflight.get(k);
     const p = enqueueResolve(async () => {

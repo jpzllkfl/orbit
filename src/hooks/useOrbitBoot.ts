@@ -17,7 +17,9 @@ import {
   plexIsConfigured,
 } from '../lib';
 import { FRESH_RESET_KEY } from '../lib/orbitReset';
+import { enrichTreeFromPlex } from '../lib/enrichFromPlex';
 import { publishDesktopMediaOrigin, syncOmsTreeFromHome } from '../lib/omsSync';
+import { plexMetadataOnly } from '../lib/plexMetadataMode';
 import { isDesktopApp } from '../lib/isDesktop';
 import { invalidateTitleIndex } from '../lib/treeIndex';
 import type { OrbitUser } from '../lib/orbitAccount';
@@ -193,6 +195,18 @@ export function useOrbitBoot(opts: {
           }
         }
         await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+        if (!alive) return;
+        if (plexMetadataOnly() && Plex.connected) {
+          try {
+            const enriched = await enrichTreeFromPlex(state.tree);
+            if (enriched) {
+              state = { tree: enriched, path: state.path };
+              TreeStore.save(enriched);
+            }
+          } catch {
+            /* offline */
+          }
+        }
         if (!alive) return;
         setTree(state.tree);
         setPath(state.path);

@@ -11,6 +11,10 @@ export type HeroConfig = {
 };
 
 export type OrbitSettings = {
+  connections: {
+    /** Plex for artwork/metadata only — never import Plex libraries into the sidebar. */
+    plexMetadataOnly: boolean;
+  };
   playback: {
     quality: PlaybackQuality;
     preferDirectPlay: boolean;
@@ -47,6 +51,9 @@ export const DEFAULT_HERO: HeroConfig = {
 const LS = 'orbit.settings.v1';
 
 export const DEFAULT_SETTINGS: OrbitSettings = {
+  connections: {
+    plexMetadataOnly: true,
+  },
   playback: {
     quality: 'auto',
     preferDirectPlay: true,
@@ -86,6 +93,7 @@ function notify() {
 function mergeSettings(raw: Partial<OrbitSettings> | null): OrbitSettings {
   const base = structuredClone(DEFAULT_SETTINGS);
   if (!raw) return base;
+  if (raw.connections) Object.assign(base.connections, raw.connections);
   if (raw.playback) Object.assign(base.playback, raw.playback);
   if (raw.appearance) Object.assign(base.appearance, raw.appearance);
   if (raw.library) Object.assign(base.library, raw.library);
@@ -126,6 +134,7 @@ export function patchSettings(patch: Partial<OrbitSettings>) {
     mergeSettings({
       ...cur,
       ...patch,
+      connections: { ...cur.connections, ...patch.connections },
       playback: { ...cur.playback, ...patch.playback },
       appearance: { ...cur.appearance, ...patch.appearance },
       library: { ...cur.library, ...patch.library },

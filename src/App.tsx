@@ -23,6 +23,7 @@ import { useOrbitBoot } from './hooks/useOrbitBoot';
 import { nextEpisodeAfter } from './lib/nextEpisode';
 import { isTitleInLibrary, matchPartsToLibrary } from './lib/franchiseMatch';
 import { enrichTreeFromPlex } from './lib/enrichFromPlex';
+import { shouldImportPlexLibraries } from './lib/plexMetadataMode';
 import { maybeAutoScanOms } from './lib/omsAutoScan';
 import { applyFranchiseCollectionsToTree } from './lib/tmdbFranchiseCollections';
 import { invalidateTitleIndex, searchTitles, similarTitles, sortedTitlesForScope, titleNodes } from './lib/treeIndex';
@@ -207,6 +208,17 @@ export default function App() {
     return () => window.clearTimeout(t);
   }, [query]);
 
+  async function syncPlexMetadata() {
+    if (!Plex.connected) return;
+    const enriched = await enrichTreeFromPlex(treeRef.current);
+    if (enriched) {
+      setTree(enriched);
+      persistTree(enriched);
+      invalidateTitleIndex();
+      setVer((v) => v + 1);
+    }
+  }
+
   async function mergeOmsAfterScan() {
     try {
       const { syncOmsTreeFromHome } = await import('./lib/omsSync');
@@ -329,17 +341,11 @@ export default function App() {
   }, [libraryReady]);
 
   useEffect(() => {
-    if (!libraryReady || plexEnrichDone.current) return;
+    if (!libraryReady || !Plex.connected) return;
+    if (plexEnrichDone.current && connVer === 0) return;
     plexEnrichDone.current = true;
-    void (async () => {
-      const enriched = await enrichTreeFromPlex(treeRef.current);
-      if (enriched) {
-        setTree(enriched);
-        persistTree(enriched);
-        setVer((v) => v + 1);
-      }
-    })();
-  }, [libraryReady]);
+    void syncPlexMetadata();
+  }, [libraryReady, connVer]);
 
   useEffect(() => {
     if (!libraryReady || franchiseCollDone.current) return;
@@ -1147,7 +1153,14 @@ export default function App() {
     );
   }
 
-  if (needsPlexImport(tree) && !plexBootSyncing && !bootError && orbitUser && Conn.connected) {
+  if (
+    needsPlexImport(tree) &&
+    shouldImportPlexLibraries(tree) &&
+    !plexBootSyncing &&
+    !bootError &&
+    orbitUser &&
+    Conn.connected
+  ) {
     return (
       <div className="login-gate">
         <div className="login-gate-orb" />
@@ -1467,6 +1480,7 @@ export default function App() {
                 onBump={() => setVer((v) => v + 1)}
                 onAccountChange={reloadFromStorage}
                 onOmsImport={onOmsImport}
+                onSyncPlexMetadata={() => void syncPlexMetadata()}
               />
             </Suspense>
           ) : view === 'settings' ? (

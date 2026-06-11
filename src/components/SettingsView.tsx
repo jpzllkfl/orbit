@@ -358,6 +358,29 @@ export function SettingsView({
           </div>
         </section>
 
+        <section className="conns-card">
+          <div className="conns-card-h">
+            <span className="conns-pill">{I.server({})}Plex</span>
+          </div>
+          <div className="settings-rows">
+            <label className="settings-row check">
+              <span>
+                <strong>Plex for artwork &amp; metadata only</strong>
+                <small>Keep OMS/local libraries for files and direct play; use Plex for posters, themes, and collection art</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={settings.connections?.plexMetadataOnly !== false}
+                onChange={(e) =>
+                  update({
+                    connections: { ...settings.connections, plexMetadataOnly: e.target.checked },
+                  })
+                }
+              />
+            </label>
+          </div>
+        </section>
+
         <section className="conns-card wide">
           <div className="conns-card-h">
             <span className="conns-pill">{I.server({})}Remote access</span>
