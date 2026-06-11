@@ -208,9 +208,12 @@ export default function App() {
     return () => window.clearTimeout(t);
   }, [query]);
 
-  async function syncPlexMetadata() {
+  async function syncPlexMetadata(opts?: { full?: boolean }) {
     if (!Plex.connected) return;
-    const enriched = await enrichTreeFromPlex(treeRef.current);
+    const enriched = await enrichTreeFromPlex(treeRef.current, {
+      full: opts?.full,
+      deadlineMs: opts?.full ? 120000 : 45000,
+    });
     if (enriched) {
       setTree(enriched);
       persistTree(enriched);
@@ -1482,7 +1485,7 @@ export default function App() {
                 onBump={() => setVer((v) => v + 1)}
                 onAccountChange={reloadFromStorage}
                 onOmsImport={onOmsImport}
-                onSyncPlexMetadata={() => void syncPlexMetadata()}
+                onSyncPlexMetadata={() => void syncPlexMetadata({ full: true })}
               />
             </Suspense>
           ) : view === 'settings' ? (

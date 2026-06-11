@@ -61,25 +61,39 @@ function applyCollMeta(n: OrbitNode, hit: PlexCollMeta, preferPlex: boolean) {
   Lib.seed(n, { poster: hit.poster, backdrop: hit.backdrop });
 }
 
+export type EnrichFromPlexOpts = {
+  /** Re-check every title/collection, not only ones missing art (manual sync). */
+  full?: boolean;
+  /** Stop after this many ms and return partial results. */
+  deadlineMs?: number;
+};
+
 /**
  * Pull posters, backdrops, themes, and display metadata from Plex onto the existing OMS/local tree.
  * Does not add or move library titles — playback stays on OMS paths.
  */
-export async function enrichTreeFromPlex(root: OrbitNode): Promise<OrbitNode | null> {
+export async function enrichTreeFromPlex(
+  root: OrbitNode,
+  opts: EnrichFromPlexOpts = {},
+): Promise<OrbitNode | null> {
   if (!Plex.connected) return null;
 
   const preferPlex = plexMetadataOnly();
+  const full = opts.full === true;
+  const deadline = opts.deadlineMs ? Date.now() + opts.deadlineMs : 0;
   const nodes: OrbitNode[] = [];
   walkNodes(root, nodes);
 
   const titles = nodes.filter((n) => n.type === 'movie' || n.type === 'show');
   const collections = nodes.filter((n) => n.type === 'collection');
-  const titleTargets = preferPlex
-    ? titles
-    : titles.filter((n) => !n.poster || !n.plexKey || (n.type === 'show' && !n.theme));
-  const collTargets = preferPlex
-    ? collections
-    : collections.filter((n) => !n.poster);
+  const needsTitleArt = (n: OrbitNode) => !n.poster || !n.plexKey || (n.type === 'show' && !n.theme);
+  const titleTargets =
+    full || !preferPlex
+      ? full
+        ? titles
+        : titles.filter(needsTitleArt)
+      : titles.filter(needsTitleArt);
+  const collTargets = full ? collections : collections.filter((n) => !n.poster);
 
   if (!titleTargets.length && !collTargets.length) return null;
 
@@ -100,6 +114,7 @@ export async function enrichTreeFromPlex(root: OrbitNode): Promise<OrbitNode | n
   const batch = 6;
 
   for (let i = 0; i < titleTargets.length; i += batch) {
+    if (deadline && Date.now() > deadline) break;
     if (!Plex.findTitleMetadata) break;
     await Promise.all(
       titleTargets.slice(i, i + batch).map(async (src) => {

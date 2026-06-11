@@ -17,9 +17,8 @@ import {
   plexIsConfigured,
 } from '../lib';
 import { FRESH_RESET_KEY } from '../lib/orbitReset';
-import { enrichTreeFromPlex } from '../lib/enrichFromPlex';
 import { publishDesktopMediaOrigin, syncOmsTreeFromHome } from '../lib/omsSync';
-import { plexMetadataOnly } from '../lib/plexMetadataMode';
+import { withTimeout } from '../lib/withTimeout';
 import { isDesktopApp } from '../lib/isDesktop';
 import { invalidateTitleIndex } from '../lib/treeIndex';
 import type { OrbitUser } from '../lib/orbitAccount';
@@ -70,9 +69,9 @@ export function useOrbitBoot(opts: {
           if (!freshReset) {
             setBootMsg('Syncing your account…');
             try {
-              await OrbitAccount.pullSync();
+              await withTimeout(OrbitAccount.pullSync(), 25000, 'Account sync');
               resetAppStateCache(false);
-              if (isDesktopApp()) await publishDesktopMediaOrigin();
+              if (isDesktopApp()) await withTimeout(publishDesktopMediaOrigin(), 8000, 'Desktop origin');
             } catch {
               /* offline */
             }
@@ -179,14 +178,6 @@ export function useOrbitBoot(opts: {
         }
 
         if (!alive) return;
-        if (user && !freshReset) {
-          const omsMerged = await syncOmsTreeFromHome(state.tree, { force: isDesktopApp() });
-          if (omsMerged) {
-            state = { tree: omsMerged, path: [omsMerged.id] };
-            resetAppStateCache(false);
-          }
-        }
-        if (!alive) return;
         if (freshReset) {
           try {
             sessionStorage.removeItem(FRESH_RESET_KEY);
@@ -194,28 +185,27 @@ export function useOrbitBoot(opts: {
             /* ignore */
           }
         }
-        await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
-        if (!alive) return;
-        if (plexMetadataOnly() && Plex.connected) {
-          try {
-            const enriched = await enrichTreeFromPlex(state.tree);
-            if (enriched) {
-              state = { tree: enriched, path: state.path };
-              TreeStore.save(enriched);
-            }
-          } catch {
-            /* offline */
-          }
-        }
-        if (!alive) return;
         setTree(state.tree);
         setPath(state.path);
         invalidateTitleIndex();
         const ready = treeHasContent(state.tree);
         liveTreeRef.current = ready;
-        await new Promise<void>((r) => window.setTimeout(r, 64));
-        if (!alive) return;
         setLibraryReady(ready);
+
+        // OMS refresh + Plex artwork run after the UI is up — never block boot on them.
+        if (user && !freshReset) {
+          void withTimeout(syncOmsTreeFromHome(state.tree, { force: isDesktopApp() }), 30000, 'OMS sync')
+            .then((omsMerged) => {
+              if (!alive || !omsMerged) return;
+              setTree(omsMerged);
+              setPath([omsMerged.id]);
+              invalidateTitleIndex();
+              liveTreeRef.current = treeHasContent(omsMerged);
+              setLibraryReady(treeHasContent(omsMerged));
+              resetAppStateCache(false);
+            })
+            .catch(() => {});
+        }
       } finally {
         if (alive) setAuthReady(true);
       }
