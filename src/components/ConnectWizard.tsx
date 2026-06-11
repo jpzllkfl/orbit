@@ -1,5 +1,6 @@
 import { useEffect, useState, type SVGProps } from 'react';
 import { Conn, Lib, OT, Plex } from '../lib';
+import { plexMetadataOnly } from '../lib/plexMetadataMode';
 import { countTitles } from '../lib/importUtils';
 import type { ConnAccount, ConnServer } from '../lib/conn';
 import type { OrbitNode } from '../types/orbit';
@@ -46,6 +47,8 @@ type ServerChoice = ConnServer & { raw: PlexResource };
 export interface WizardResult {
   tree?: OrbitNode;
   demo?: boolean;
+  /** Linked Plex for posters/themes only — did not import Plex libraries. */
+  metadataOnly?: boolean;
   items: number;
   account: ConnAccount;
   server?: ConnServer;
@@ -161,7 +164,7 @@ export function ConnectWizard({
       setPlexSections(secs);
       setChosen(new Set(secs.map((x) => x.key)));
       setMode('live');
-      setStep('libraries');
+      setStep(plexMetadataOnly() ? 'sync' : 'libraries');
     } catch (e) {
       setAuthError(e instanceof Error ? e.message : 'Could not reach this server');
     } finally {
@@ -222,7 +225,7 @@ export function ConnectWizard({
       setPlexSections(secs);
       setChosen(new Set(secs.map((x) => x.key)));
       setMode('live');
-      setStep('libraries');
+      setStep(plexMetadataOnly() ? 'sync' : 'libraries');
     } catch (e) {
       setAuthError(e instanceof Error ? e.message : 'Connection failed');
     } finally {
@@ -289,9 +292,9 @@ export function ConnectWizard({
           ))}
         </div>
         <div className="cw-aside-foot">
-          Sign in with Plex — no server URL or token needed.
-          <br />
-          Orbit discovers your server and imports your libraries.
+          {plexMetadataOnly()
+            ? 'Sign in with Plex to pull posters, themes, and collection art onto your Orbit Media Server libraries.'
+            : 'Sign in with Plex — no server URL or token needed. Orbit discovers your server and imports your libraries.'}
         </div>
       </div>
 
@@ -306,7 +309,11 @@ export function ConnectWizard({
               <>
                 <div className="cw-mark plex">{ic.plex({})}</div>
                 <h2 className="disp">Connect your Plex account</h2>
-                <p>Sign in once — Orbit finds your server and imports Movies, TV, collections, and everything you’ve organized.</p>
+                <p>
+                  {plexMetadataOnly()
+                    ? 'Sign in once — Orbit links your Plex server for posters, theme music, titles, and collection artwork. Your Orbit Media Server libraries stay in charge of files and playback.'
+                    : 'Sign in once — Orbit finds your server and imports Movies, TV, collections, and everything you’ve organized.'}
+                </p>
                 {authError && <div className="plex-error">{authError}</div>}
                 <button type="button" className="cw-primary plex" onClick={signInPlex}>
                   {ic.plex({ style: { width: 18, height: 18 } })}
@@ -474,7 +481,8 @@ export function ConnectWizard({
         {step === 'sync' && (
           <SyncStep
             mode={mode}
-            sectionKeys={mode === 'live' ? Array.from(chosen) : undefined}
+            metadataOnly={mode === 'live' && plexMetadataOnly()}
+            sectionKeys={mode === 'live' && !plexMetadataOnly() ? Array.from(chosen) : undefined}
             demoLibs={demoLibs.filter((l) => chosen.has(l.id))}
             server={server}
             account={acct!}
@@ -488,6 +496,7 @@ export function ConnectWizard({
 
 function SyncStep({
   mode,
+  metadataOnly,
   sectionKeys,
   demoLibs,
   server,
@@ -495,6 +504,7 @@ function SyncStep({
   onDone,
 }: {
   mode: 'live' | 'demo';
+  metadataOnly?: boolean;
   sectionKeys?: string[];
   demoLibs: OrbitNode[];
   server: ServerChoice | null;
@@ -510,13 +520,34 @@ function SyncStep({
   const [idx, setIdx] = useState(0);
 
   useEffect(() => {
-    if (mode !== 'live' || !sectionKeys) return;
+    if (mode !== 'live') return;
+    if (!metadataOnly && !sectionKeys) return;
     let alive = true;
     (async () => {
       try {
+        if (metadataOnly) {
+          setMsg('Linking Plex for posters and artwork…');
+          setProgress(60);
+          await Plex.sections().catch(() => null);
+          if (!alive) return;
+          setProgress(100);
+          setPhase('done');
+          setMsg('Plex linked — syncing artwork onto your libraries…');
+          setTimeout(
+            () =>
+              onDone({
+                metadataOnly: true,
+                items: 0,
+                account,
+                server: server || undefined,
+              }),
+            900,
+          );
+          return;
+        }
         setMsg('Reading your Plex libraries…');
         setProgress(20);
-        const tree = await Plex.buildTree(sectionKeys);
+        const tree = await Plex.buildTree(sectionKeys!);
         if (!alive) return;
         setProgress(85);
         setMsg('Finishing up…');
@@ -545,7 +576,7 @@ function SyncStep({
     return () => {
       alive = false;
     };
-  }, [mode, sectionKeys, account, server, onDone, attempt]);
+  }, [mode, metadataOnly, sectionKeys, account, server, onDone, attempt]);
 
   useEffect(() => {
     if (mode !== 'demo') return;
@@ -575,7 +606,9 @@ function SyncStep({
         <div className={'cw-mark' + (phase === 'done' ? ' ok' : phase === 'error' ? '' : ' spin-mark')}>
           {phase === 'done' ? ic.check({}) : phase === 'error' ? ic.x({}) : ic.refresh({})}
         </div>
-        <h2 className="disp">{phase === 'done' ? 'You’re all set' : phase === 'error' ? 'Sync failed' : 'Importing your library'}</h2>
+        <h2 className="disp">
+          {phase === 'done' ? 'You’re all set' : phase === 'error' ? 'Sync failed' : metadataOnly ? 'Linking Plex artwork' : 'Importing your library'}
+        </h2>
         <p>{msg}</p>
         {phase !== 'error' && (
           <div className="cw-sr-bar" style={{ marginTop: 24, maxWidth: 420 }}>

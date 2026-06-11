@@ -514,7 +514,9 @@ export default function App() {
   }
 
   function onWizardComplete(result: WizardResult) {
-    if (result.tree) {
+    if (result.metadataOnly) {
+      void syncPlexMetadata();
+    } else if (result.tree) {
       if (!result.demo) {
         TreeStore.save(result.tree);
         const stored = TreeStore.load() || result.tree;
@@ -534,11 +536,11 @@ export default function App() {
       }
     }
     setShowWizard(false);
-    setView('grid');
+    setView(result.metadataOnly ? 'connections' : 'grid');
     setConnVer((v) => v + 1);
     setVer((v) => v + 1);
     mainRef.current?.scrollTo(0, 0);
-    if (!result.demo && result.tree && Plex.connected) {
+    if (!result.demo && !result.metadataOnly && result.tree && Plex.connected) {
       syncWatchStateFromPlex(result.tree).then(() => setVer((v) => v + 1));
     }
   }

@@ -55,7 +55,8 @@ export function ConnectionsView({
     ? new Date(conn.syncedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
     : 'not yet';
   const server = conn?.server;
-  const plexLive = conn?.live && Plex.connected;
+  const plexLinked = !!(conn?.connected && server && Plex.connected);
+  const plexStale = !!(conn?.connected && server && !Plex.connected);
 
   function signOut() {
     Conn.clear();
@@ -286,9 +287,16 @@ export function ConnectionsView({
               Sign out &amp; reconnect
             </button>
           ) : (
-            <p className="conns-sub" style={{ marginTop: 10 }}>
-              Plex is optional. Use Orbit Media Server above for direct TrueNAS playback.
-            </p>
+            <>
+              <p className="conns-sub" style={{ marginTop: 10 }}>
+                Link Plex to pull posters, theme music, titles, and collection artwork onto your Orbit Media Server
+                libraries. Your files and direct play stay on OMS.
+              </p>
+              <button type="button" className="conns-btn primary sm" style={{ marginTop: 10 }} onClick={onOpenWizard}>
+                {ic.plex({ style: { width: 16, height: 16 } })}
+                Connect Plex for artwork
+              </button>
+            </>
           )}
         </div>
 
@@ -322,7 +330,13 @@ export function ConnectionsView({
                   </dd>
                 </div>
               </dl>
-              {plexLive && (
+              {plexStale && (
+                <p className="conns-sub oms-msg" style={{ marginTop: 12 }}>
+                  Plex account is saved but the server link expired. Use <strong>Re-run setup</strong> or sign out and
+                  connect again to refresh posters and themes.
+                </p>
+              )}
+              {(plexLinked || plexStale) && (
                 <div style={{ marginTop: 12 }}>
                   <label className="settings-row check" style={{ marginBottom: 10 }}>
                     <span>
@@ -353,7 +367,7 @@ export function ConnectionsView({
                     <button
                       type="button"
                       className="conns-btn sm"
-                      disabled={plexMetaBusy || !plexLive}
+                      disabled={plexMetaBusy || !plexLinked}
                       onClick={() => {
                         setPlexMetaBusy(true);
                         Promise.resolve(onSyncPlexMetadata?.()).finally(() => {
