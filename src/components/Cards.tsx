@@ -3,7 +3,6 @@ import { Lib, OT, Plex } from '../lib';
 import { plexArtFromNode } from '../lib/importUtils';
 import { asyncHeroBackdrop, syncHeroBackdrop } from '../lib/heroArt';
 import { hiResBackdrop } from '../lib/artUrls';
-import { acquireImageSlot, releaseImageSlot } from '../lib/imgQueue';
 import type { OrbitNode } from '../types/orbit';
 import { ArtCtx, ArtView, SmartPoster } from './Posters';
 import { Icons } from './icons';
@@ -186,7 +185,6 @@ function HeroBackdropImg({ node, rep, eager = false }: { node: OrbitNode; rep?: 
   const artRev = useContext(ArtCtx);
   const subject = rep || node;
   const imgRef = useRef<HTMLImageElement>(null);
-  const slotHeld = useRef(false);
   const [url, setUrl] = useState<string | null>(() => syncHeroBackdrop(node));
   const [displaySrc, setDisplaySrc] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -211,29 +209,9 @@ function HeroBackdropImg({ node, rep, eager = false }: { node: OrbitNode; rep?: 
   }, [node.id, node.plexKey, node.backdrop, node.poster, node.title, artRev]);
 
   useEffect(() => {
-    if (slotHeld.current) {
-      releaseImageSlot();
-      slotHeld.current = false;
-    }
     setDisplaySrc(null);
     setLoaded(false);
-    if (!url) return;
-    let cancelled = false;
-    acquireImageSlot().then(() => {
-      if (cancelled) {
-        releaseImageSlot();
-        return;
-      }
-      slotHeld.current = true;
-      setDisplaySrc(url);
-    });
-    return () => {
-      cancelled = true;
-      if (slotHeld.current) {
-        releaseImageSlot();
-        slotHeld.current = false;
-      }
-    };
+    setDisplaySrc(url);
   }, [url, node.id]);
 
   useEffect(() => {
@@ -242,20 +220,16 @@ function HeroBackdropImg({ node, rep, eager = false }: { node: OrbitNode; rep?: 
     if (el?.complete && el.naturalWidth > 0) setLoaded(true);
   }, [displaySrc]);
 
-  const finishLoad = () => {
-    setLoaded(true);
-    if (slotHeld.current) {
-      releaseImageSlot();
-      slotHeld.current = false;
-    }
-  };
+  const finishLoad = () => setLoaded(true);
 
   const onError = () => {
     fails.current += 1;
     if (fails.current === 1 && node.plexKey && Plex.connected) {
-      const thumb = Plex.imgUrl('/library/metadata/' + node.plexKey + '/thumb', 'card');
-      if (thumb) {
-        setUrl(hiResBackdrop(thumb));
+      const art = Plex.imgUrl('/library/metadata/' + node.plexKey + '/art', 'backdrop');
+      const thumb = Plex.imgUrl('/library/metadata/' + node.plexKey + '/thumb', 'backdrop');
+      const fallback = art || thumb;
+      if (fallback) {
+        setUrl(hiResBackdrop(fallback));
         return;
       }
     }
@@ -281,7 +255,8 @@ function HeroBackdropImg({ node, rep, eager = false }: { node: OrbitNode; rep?: 
             src={displaySrc}
             alt=""
             loading={eager ? 'eager' : 'lazy'}
-            decoding="async"
+            decoding={eager ? 'sync' : 'async'}
+            fetchPriority={eager ? 'high' : 'auto'}
             className={'spot-bg-img' + (loaded ? ' loaded' : '')}
             onLoad={finishLoad}
             onError={() => {

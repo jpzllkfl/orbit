@@ -84,7 +84,7 @@ export function createArtRouter() {
       res.json({
         tmdbId,
         posters: (j.posters || []).slice(0, 20).map((p) => img(p.file_path, 'w342')).filter(Boolean),
-        backdrops: (j.backdrops || []).slice(0, 12).map((p) => img(p.file_path, 'w780')).filter(Boolean),
+        backdrops: (j.backdrops || []).slice(0, 12).map((p) => img(p.file_path, 'original')).filter(Boolean),
       });
     } catch (e) {
       res.status(502).json({ error: e.message || 'Artwork fetch failed.' });
@@ -115,7 +115,7 @@ export function createArtRouter() {
       const posters = [hit.poster_path, hit.backdrop_path].map((p) => img(p, 'w500')).filter(Boolean);
       res.json({
         posters,
-        backdrops: hit.backdrop_path ? [img(hit.backdrop_path, 'w1280')] : [],
+        backdrops: hit.backdrop_path ? [img(hit.backdrop_path, 'original')] : [],
         tmdbId: hit.id,
       });
     } catch (e) {

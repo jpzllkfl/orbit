@@ -41,8 +41,8 @@ function allItemsForLibrary(libraryId) {
 
 function artFromRow(row) {
   return {
-    poster: tmdbImgUrl(row.poster_path, 'w500') || undefined,
-    backdrop: tmdbImgUrl(row.backdrop_path, 'w1280') || undefined,
+    poster: tmdbImgUrl(row.poster_path, 'w780') || undefined,
+    backdrop: tmdbImgUrl(row.backdrop_path, 'original') || undefined,
   };
 }
 

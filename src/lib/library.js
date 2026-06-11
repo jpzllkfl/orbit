@@ -187,7 +187,7 @@ window.OrbitLib = (function () {
       genre: genreName((r.genre_ids || [])[0]),
       overview: r.overview || '',
       poster: imgUrl(r.poster_path, 'w500'),
-      backdrop: imgUrl(r.backdrop_path, 'w1280'),
+      backdrop: imgUrl(r.backdrop_path, 'original'),
       rating: r.vote_average ? Math.round(r.vote_average * 10) / 10 : null,
       tmdbId: r.id,
       popularity: r.popularity || 0,
@@ -239,7 +239,7 @@ window.OrbitLib = (function () {
           const j = await apiGet('/' + kind + '/' + node.tmdbId);
           const data = {
             poster: imgUrl(j.poster_path, 'w500'),
-            backdrop: imgUrl(j.backdrop_path, 'w1280'),
+            backdrop: imgUrl(j.backdrop_path, 'original'),
             overview: j.overview || '',
             rating: j.vote_average ? Math.round(j.vote_average * 10) / 10 : null,
             tmdbId: node.tmdbId,
@@ -256,7 +256,7 @@ window.OrbitLib = (function () {
         const hit = (json.results || [])[0];
         const data = hit ? {
           poster: imgUrl(hit.poster_path, 'w500'),
-          backdrop: imgUrl(hit.backdrop_path, 'w1280'),
+          backdrop: imgUrl(hit.backdrop_path, 'original'),
           overview: hit.overview || '',
           rating: hit.vote_average ? Math.round(hit.vote_average * 10) / 10 : null,
           tmdbId: hit.id,
@@ -285,7 +285,7 @@ window.OrbitLib = (function () {
         const json = await apiGet('/search/' + kind, params);
         const hit = (json.results || [])[0];
         const data = hit ? {
-          poster: imgUrl(hit.poster_path, 'w500'), backdrop: imgUrl(hit.backdrop_path, 'w1280'),
+          poster: imgUrl(hit.poster_path, 'w500'), backdrop: imgUrl(hit.backdrop_path, 'original'),
           overview: hit.overview || '', rating: hit.vote_average ? Math.round(hit.vote_average * 10) / 10 : null, popularity: hit.popularity || 0, tmdbId: hit.id,
         } : { empty: true };
         cache[k] = data; saveCache();
@@ -344,7 +344,7 @@ window.OrbitLib = (function () {
       const json = await apiGet('/search/collection', { query: q });
       return (json.results || []).map((r) => ({
         type: 'collection', title: r.name, tmdbId: r.id,
-        poster: imgUrl(r.poster_path, 'w500'), backdrop: imgUrl(r.backdrop_path, 'w1280'),
+        poster: imgUrl(r.poster_path, 'w500'), backdrop: imgUrl(r.backdrop_path, 'original'),
         overview: r.overview || '',
       }));
     } catch (e) { return []; }

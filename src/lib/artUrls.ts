@@ -1,5 +1,4 @@
 const PLEX_BACKDROP = 'width=3840&height=2160&minSize=1&upscale=1';
-const PLEX_BACKDROP_FAST = 'width=1280&height=720&minSize=1&upscale=1';
 const PLEX_POSTER = 'width=800&height=1200&minSize=1&upscale=1';
 const PLEX_CARD = 'width=300&height=450&minSize=1&upscale=1';
 
@@ -17,14 +16,25 @@ function upgradePlexPath(path: string, params: string) {
   return appendQuery(path, params);
 }
 
+/** TMDB backdrop at full resolution (heroes / detail pages — never downgraded). */
+export function tmdbBackdropUrl(pathOrUrl: string | null | undefined): string | null {
+  if (!pathOrUrl) return null;
+  if (pathOrUrl.startsWith('http')) {
+    return pathOrUrl.replace(/\/t\/p\/w\d+\//, '/t/p/original/');
+  }
+  if (pathOrUrl.startsWith('/')) {
+    return `https://image.tmdb.org/t/p/original${pathOrUrl}`;
+  }
+  return pathOrUrl;
+}
+
 /** Upgrade Plex proxy or direct server art URLs to full backdrop resolution. */
 export function hiResBackdrop(url: string | null | undefined): string | null {
   if (!url) return null;
-  const fast = fastPostersOn();
   if (url.includes('image.tmdb.org')) {
-    return url.replace(/\/w\d+\//, fast ? '/w780/' : '/w1920/');
+    return url.replace(/\/t\/p\/w\d+\//, '/t/p/original/');
   }
-  const backdropParams = fast ? PLEX_BACKDROP_FAST : PLEX_BACKDROP;
+  const backdropParams = PLEX_BACKDROP;
   if (url.includes('/api/plex/media')) {
     try {
       const u = new URL(url, typeof window !== 'undefined' ? window.location.origin : 'http://localhost');

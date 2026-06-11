@@ -269,7 +269,7 @@ window.OrbitPlex = (function () {
     if (!path.includes('width=')) {
       const sep = path.includes('?') ? '&' : '?';
       if (kind === 'backdrop' || kind === 'art') {
-        p = path + sep + (fast ? 'width=1280&height=720&minSize=1&upscale=1' : 'width=3840&height=2160&minSize=1&upscale=1');
+        p = path + sep + 'width=3840&height=2160&minSize=1&upscale=1';
       } else if (kind === 'card' || (fast && (kind === 'poster' || kind === 'thumb'))) {
         p = path + sep + 'width=300&height=450&minSize=1&upscale=1';
       } else if (kind === 'poster' || kind === 'thumb') {

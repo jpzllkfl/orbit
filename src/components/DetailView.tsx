@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type SV
 import { Lib, Meta, Plex, Progress } from '../lib';
 import { OrbitMedia } from '../lib/orbitMedia';
 import type { Episode, OrbitNode } from '../types/orbit';
+import { hiResBackdrop } from '../lib/artUrls';
 import { ArtView, SmartLandscape, SmartPoster, useArt } from './Posters';
 
 interface TitleMeta {
@@ -576,7 +577,7 @@ export function DetailView({
     }
   }
 
-  const pageBackdrop = art?.backdrop || null;
+  const pageBackdrop = art?.backdrop ? hiResBackdrop(art.backdrop) || art.backdrop : null;
 
   return (
     <div className={'detail' + (isShow && pageBackdrop ? ' show-detail' : '')} ref={scrollRef} onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 220)}>
@@ -589,7 +590,7 @@ export function DetailView({
       <div className="dt-hero">
         <div className="dt-backdrop">
           {isShow && pageBackdrop ? null : art?.backdrop ? (
-            <img src={art.backdrop} alt="" />
+            <img src={hiResBackdrop(art.backdrop) || art.backdrop} alt="" />
           ) : (
             <div className="dt-art">
               <ArtView node={node} />
