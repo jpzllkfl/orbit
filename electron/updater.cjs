@@ -76,11 +76,15 @@ function installUpdate() {
   return true;
 }
 
-function scheduleStartupCheck(delayMs = 12000) {
+function scheduleStartupCheck(delayMs = 8000) {
   if (!app.isPackaged) return;
   setTimeout(() => {
     checkForUpdates().catch(() => {});
   }, delayMs);
+  // Re-check every 6 hours while the app stays open.
+  setInterval(() => {
+    checkForUpdates().catch(() => {});
+  }, 6 * 60 * 60 * 1000);
 }
 
 module.exports = { initAutoUpdater, checkForUpdates, installUpdate, scheduleStartupCheck, getUpdateStatus: () => lastStatus };

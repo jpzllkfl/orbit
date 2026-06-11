@@ -9,6 +9,12 @@ const { initAutoUpdater, checkForUpdates, installUpdate, scheduleStartupCheck, g
 const ROOT = path.join(__dirname, '..');
 const DEBUG = process.env.ORBIT_ELECTRON_DEBUG === '1';
 
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+  process.exit(0);
+}
+
 // Large synced libraries can spike renderer memory during JSON parse.
 app.commandLine.appendSwitch('js-flags', '--max-old-space-size=8192');
 
@@ -204,6 +210,14 @@ function createMainWindow(port) {
   });
 }
 
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
+
 app.whenReady().then(async () => {
   try {
     const port = await startServer();
@@ -212,6 +226,13 @@ app.whenReady().then(async () => {
   } catch (e) {
     console.error('[orbit-desktop] boot error', e);
     showBootError('Orbit could not start', String(e.message || e));
+  }
+});
+
+app.on('activate', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show();
+    mainWindow.focus();
   }
 });
 

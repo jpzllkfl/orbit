@@ -26,6 +26,8 @@ export type OrbitSettings = {
     initialGridBatch: number;
     autoCollections: boolean;
     instantPosters: boolean;
+    /** Desktop OMS: periodically scan library folders for new files. */
+    autoScanOms: boolean;
   };
   hero: {
     home: HeroConfig;
@@ -58,6 +60,7 @@ export const DEFAULT_SETTINGS: OrbitSettings = {
     initialGridBatch: 36,
     autoCollections: false,
     instantPosters: true,
+    autoScanOms: true,
   },
   hero: {
     home: { ...DEFAULT_HERO, source: 'trending_all', count: 10, seed: 3 },

@@ -328,6 +328,20 @@ export function SettingsView({
                 onChange={(e) => update({ library: { ...settings.library, instantPosters: e.target.checked } })}
               />
             </label>
+            <label className="settings-row check">
+              <span>
+                <strong>Auto-scan media folders</strong>
+                <small>
+                  Desktop only — checks your library drives for new files about every 30 minutes and when you return to
+                  the app. Turn off if you prefer manual Scan in Connections.
+                </small>
+              </span>
+              <input
+                type="checkbox"
+                checked={settings.library.autoScanOms ?? true}
+                onChange={(e) => update({ library: { ...settings.library, autoScanOms: e.target.checked } })}
+              />
+            </label>
           </div>
         </section>
 

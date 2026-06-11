@@ -1,7 +1,8 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import type { OrbitNode } from '../types/orbit';
 import type { WizardResult } from './ConnectWizard';
 import ORBIT_DATA from '../lib/data.js';
+import { titleNodes } from '../lib/treeIndex';
 
 type TitleResult = { type: string; title: string; year?: number | null; genre?: string; poster?: string | null; tmdbId?: number };
 type CollResult = { tmdbId: number; title: string; poster?: string | null; overview?: string };
@@ -76,6 +77,8 @@ export function ModalHost(props: ModalHostProps) {
     onBackdropSaved,
   } = props;
 
+  const libraryTitles = useMemo(() => titleNodes(tree), [tree]);
+
   const open =
     addToCollFor || mergeOpen || modalFor || showWizard || artFor || bgPickerFor;
   if (!open) return null;
@@ -103,6 +106,7 @@ export function ModalHost(props: ModalHostProps) {
         <AddModal
           collection={modalFor.coll}
           present={modalFor.coll.children || []}
+          libraryTitles={libraryTitles}
           archive={archive}
           connected={connected}
           defaultKind={modalFor.kind || 'movie'}

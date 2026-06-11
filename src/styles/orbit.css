@@ -614,6 +614,22 @@ html.orbit-reduce-motion .coll-card { transition: none !important; transform: no
 .fr-sub { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
 .fr-action { flex: none; font-size: 13px; font-weight: 700; color: var(--warm); padding: 7px 13px; border-radius: 99px; background: color-mix(in oklch, var(--warm), transparent 86%); }
 .franchise-row.added .fr-action { color: rgb(103, 210, 131); background: rgba(33, 118, 60, 0.15); }
+.archive-item.unavailable { opacity: 0.45; cursor: not-allowed; }
+.archive-item.unavailable .t { color: color-mix(in oklch, var(--text), transparent 35%); }
+
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  background: color-mix(in oklch, var(--warm), transparent 88%);
+  border-bottom: 1px solid color-mix(in oklch, var(--warm), transparent 65%);
+  font-size: 13px;
+  z-index: 40;
+  position: relative;
+}
 
 .connect-cta { text-align: center; padding: 30px 10px 18px; }
 .cta-orb {

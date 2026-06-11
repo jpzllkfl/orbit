@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Lib } from '../lib';
+import { countPartsInLibrary, isTitleInLibrary } from '../lib/franchiseMatch';
 import { newId } from '../lib/nodeFactory';
 import type { OrbitNode } from '../types/orbit';
 import { SmartPoster } from './Posters';
@@ -33,6 +34,7 @@ export function AddModal({
   onAddArchive,
   archive,
   present,
+  libraryTitles,
   connected,
   onOpenConnect,
   defaultKind = 'movie',
@@ -45,6 +47,7 @@ export function AddModal({
   onAddArchive: (node: OrbitNode) => void;
   archive: OrbitNode[];
   present: OrbitNode[];
+  libraryTitles: OrbitNode[];
   connected: boolean;
   onOpenConnect: () => void;
   defaultKind?: 'movie' | 'show' | 'collection';
@@ -61,6 +64,7 @@ export function AddModal({
   const [titles, setTitles] = useState<TitleResult[]>([]);
   const [addedIds, setAddedIds] = useState<number[]>([]);
   const [building, setBuilding] = useState<number | null>(null);
+  const [franchiseCounts, setFranchiseCounts] = useState<Record<number, { matched: number; total: number }>>({});
   const presentIds = new Set([...present.map((n) => n.title), ...justAdded]);
 
   useEffect(() => {
@@ -86,6 +90,27 @@ export function AddModal({
     return () => clearTimeout(h);
   }, [q, tab, connected]);
 
+  useEffect(() => {
+    if (!colls.length) {
+      setFranchiseCounts({});
+      return;
+    }
+    let alive = true;
+    (async () => {
+      const next: Record<number, { matched: number; total: number }> = {};
+      await Promise.all(
+        colls.slice(0, 4).map(async (cr) => {
+          const parts = await Lib.collectionParts(cr.tmdbId);
+          next[cr.tmdbId] = countPartsInLibrary(libraryTitles, parts);
+        }),
+      );
+      if (alive) setFranchiseCounts(next);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [colls, libraryTitles]);
+
   function create() {
     if (!title.trim()) return;
     let node: OrbitNode;
@@ -98,10 +123,12 @@ export function AddModal({
 
   async function buildFranchise(cr: CollResult) {
     if (building) return;
+    const counts = franchiseCounts[cr.tmdbId];
+    if (counts && counts.matched === 0) return;
     setBuilding(cr.tmdbId);
-    await onAddFranchise(cr);
+    const added = await onAddFranchise(cr);
     setBuilding(null);
-    setAddedIds((a) => [...a, cr.tmdbId]);
+    if (added > 0) setAddedIds((a) => [...a, cr.tmdbId]);
   }
 
   return (
@@ -149,15 +176,22 @@ export function AddModal({
                 </div>
               )}
 
-              {colls.length > 0 && <div className="result-head">Franchises · build as a sub-collection</div>}
+              {colls.length > 0 && <div className="result-head">Franchises · only titles already in your library</div>}
               {colls.slice(0, 4).map((cr) => {
                 const added = addedIds.includes(cr.tmdbId);
                 const isB = building === cr.tmdbId;
+                const counts = franchiseCounts[cr.tmdbId];
+                const noneOwned = counts?.matched === 0;
+                const countLabel = counts
+                  ? counts.matched === counts.total
+                    ? `${counts.matched} in your library`
+                    : `${counts.matched} of ${counts.total} in your library`
+                  : 'checking library…';
                 return (
                   <button
                     key={cr.tmdbId}
                     className={'franchise-row' + (added ? ' added' : '')}
-                    disabled={added || !!building}
+                    disabled={added || !!building || noneOwned}
                     onClick={() => buildFranchise(cr)}
                   >
                     <div className="fr-thumb">
@@ -165,24 +199,32 @@ export function AddModal({
                     </div>
                     <div className="fr-info">
                       <div className="fr-name">{cr.title}</div>
-                      <div className="fr-sub">Franchise{added ? ' · added' : ' · builds a nested collection'}</div>
+                      <div className="fr-sub">
+                        Franchise
+                        {added ? ' · added' : noneOwned ? ' · none in your library' : ` · ${countLabel}`}
+                      </div>
                     </div>
-                    <div className="fr-action">{added ? 'Added ✓' : isB ? 'Building…' : '+ Build'}</div>
+                    <div className="fr-action">
+                      {added ? 'Added ✓' : isB ? 'Building…' : noneOwned ? 'Unavailable' : '+ Build'}
+                    </div>
                   </button>
                 );
               })}
 
-              {titles.length > 0 && <div className="result-head">Titles</div>}
+              {titles.length > 0 && <div className="result-head">Titles · in your library only</div>}
               {titles.length > 0 && (
                 <div className="archive-grid">
                   {titles.slice(0, 18).map((r) => {
                     const added = r.tmdbId != null && addedIds.includes(r.tmdbId);
+                    const owned = isTitleInLibrary(libraryTitles, r);
                     return (
                       <button
                         key={r.tmdbId}
-                        className={'archive-item' + (added ? ' added' : '')}
-                        disabled={added}
+                        className={'archive-item' + (added ? ' added' : '') + (!owned ? ' unavailable' : '')}
+                        disabled={added || !owned}
+                        title={owned ? undefined : 'Not in your library — add the file to a drive and scan first'}
                         onClick={() => {
+                          if (!owned) return;
                           onAddTitle(r);
                           if (r.tmdbId != null) setAddedIds((a) => [...a, r.tmdbId!]);
                         }}
@@ -200,7 +242,7 @@ export function AddModal({
                         <div className="t">
                           {r.title}
                           {r.year ? ` · ${r.year}` : ''}
-                          {added ? ' ✓' : ''}
+                          {added ? ' ✓' : !owned ? ' · not in library' : ''}
                         </div>
                       </button>
                     );

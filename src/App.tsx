@@ -21,7 +21,9 @@ import { isDesktopApp } from './lib/isDesktop';
 import { useFeaturedHero } from './hooks/useFeaturedHero';
 import { useOrbitBoot } from './hooks/useOrbitBoot';
 import { nextEpisodeAfter } from './lib/nextEpisode';
-import { invalidateTitleIndex, searchTitles, similarTitles, sortedTitlesForScope } from './lib/treeIndex';
+import { isTitleInLibrary, matchPartsToLibrary } from './lib/franchiseMatch';
+import { maybeAutoScanOms } from './lib/omsAutoScan';
+import { invalidateTitleIndex, searchTitles, similarTitles, sortedTitlesForScope, titleNodes } from './lib/treeIndex';
 import { preloadKnownPosters } from './lib/posterPreload';
 import { loadSettings } from './lib/settings';
 import { syncWatchStateFromPlex } from './lib/plexWatchSync';
@@ -43,6 +45,7 @@ import { mergeCollectionsInTree, moveNodeInTree, removeNodeFromTree } from './li
 import { idPath, isColl, nodeByPath, sortByTitle } from './lib/treeUtils';
 import type { OrbitUser } from './lib/orbitAccount';
 import type { Episode, OrbitNode, PlayPayload } from './types/orbit';
+import type { UpdateStatus } from './types/native';
 import { AddTile, CollectionCard, CollectionHeroArt, FeaturedCollectionsHero, SpotlightHero, TitleCard, type CardDnd } from './components/Cards';
 import { MobileChrome } from './components/MobileChrome';
 import { ModalHost } from './components/ModalHost';
@@ -134,7 +137,14 @@ export default function App() {
   );
   const mainRef = useRef<HTMLElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const treeRef = useRef(tree);
+  const omsAutoScanDone = useRef(false);
+  const [desktopUpdate, setDesktopUpdate] = useState<UpdateStatus | null>(null);
   const [mobSearchOpen, setMobSearchOpen] = useState(false);
+
+  useEffect(() => {
+    treeRef.current = tree;
+  }, [tree]);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 1024px)');
@@ -192,6 +202,39 @@ export default function App() {
     const t = window.setTimeout(() => setDebouncedQuery(query), 280);
     return () => window.clearTimeout(t);
   }, [query]);
+
+  async function mergeOmsAfterScan() {
+    try {
+      const { syncOmsTreeFromHome } = await import('./lib/omsSync');
+      const merged = await syncOmsTreeFromHome(treeRef.current, { force: true });
+      if (merged) {
+        setTree(merged);
+        invalidateTitleIndex();
+        setVer((v) => v + 1);
+      }
+    } catch {
+      /* offline */
+    }
+  }
+
+  async function backgroundAccountSync() {
+    if (!OrbitAccount.signedIn || !OrbitAccount.shouldRefreshSync(120000)) return;
+    try {
+      await OrbitAccount.pullSync();
+      resetAppStateCache(false);
+      if (liveTreeRef.current) {
+        const fresh = await loadAppStateAsync();
+        setTree(fresh.tree);
+        invalidateTitleIndex();
+        setVer((v) => v + 1);
+      }
+      if (isDesktopApp() && (await maybeAutoScanOms())) {
+        await mergeOmsAfterScan();
+      }
+    } catch {
+      /* offline */
+    }
+  }
 
   async function reloadFromStorage() {
     Lib.loadKey();
@@ -266,12 +309,26 @@ export default function App() {
   useEffect(() => {
     if (!OrbitAccount.signedIn) return;
     const onVisible = () => {
-      if (document.visibilityState !== 'visible' || !OrbitAccount.shouldRefreshSync()) return;
-      setBootAttempt((a) => a + 1);
+      if (document.visibilityState !== 'visible') return;
+      void backgroundAccountSync();
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [OrbitAccount.signedIn]);
+
+  useEffect(() => {
+    if (!isDesktopApp() || !libraryReady || omsAutoScanDone.current) return;
+    omsAutoScanDone.current = true;
+    void (async () => {
+      if (await maybeAutoScanOms(true)) await mergeOmsAfterScan();
+    })();
+  }, [libraryReady]);
+
+  useEffect(() => {
+    if (!isDesktopApp() || !window.orbitNative?.getUpdateStatus) return;
+    window.orbitNative.getUpdateStatus().then((s) => setDesktopUpdate(s));
+    return window.orbitNative.onUpdateStatus?.((s) => setDesktopUpdate(s));
+  }, []);
   useEffect(() => {
     if (!curating) {
       setDrag(null);
@@ -656,11 +713,14 @@ export default function App() {
 
   async function addFranchise(cr: { tmdbId: number; title: string; overview?: string }) {
     const parts = await Lib.collectionParts(cr.tmdbId);
-    const kids = parts.map((p) => {
-      const n = resultToNode(p);
-      Lib.seed(n, p);
-      return n;
-    });
+    const owned = matchPartsToLibrary(titleNodes(tree), parts);
+    if (!owned.length) {
+      window.alert(
+        `None of the titles in “${cr.title.replace(/\s*Collection$/i, '')}” are in your library yet.\n\nScan or import your media first, then try again.`,
+      );
+      return 0;
+    }
+    const kids = owned.map((n) => structuredClone({ ...n, id: newId(n.type === 'show' ? 's' : 'm') }));
     const coll: OrbitNode = {
       id: newId('c'),
       type: 'collection',
@@ -669,6 +729,11 @@ export default function App() {
       children: kids,
     };
     addToCurrent(coll);
+    if (owned.length < parts.length) {
+      window.alert(
+        `Added ${owned.length} of ${parts.length} titles — only films and series already in your library were included.`,
+      );
+    }
     return kids.length;
   }
 
@@ -1144,6 +1209,15 @@ export default function App() {
         style={{ ['--glow' as string]: glow }}
       >
         <div className="ambient"></div>
+
+        {desktopUpdate?.state === 'ready' && (
+          <div className="update-banner">
+            <span>{desktopUpdate.message || `Update ${desktopUpdate.nextVersion || ''} is ready`}</span>
+            <button type="button" className="btn primary sm" onClick={() => window.orbitNative?.installUpdate?.()}>
+              Restart to update
+            </button>
+          </div>
+        )}
 
         {compact && (
           <MobileChrome
@@ -1834,6 +1908,7 @@ export default function App() {
           }}
           onCreate={(node) => addToCurrent(node)}
           onAddTitle={(r) => {
+            if (!isTitleInLibrary(titleNodes(tree), r)) return;
             const n = resultToNode(r);
             Lib.seed(n, r);
             addToCurrent(n);
