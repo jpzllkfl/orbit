@@ -28,6 +28,8 @@ export type OrbitSettings = {
     instantPosters: boolean;
     /** Desktop OMS: periodically scan library folders for new files. */
     autoScanOms: boolean;
+    /** Group movies into TMDB franchise collections (Plex-style). */
+    autoFranchiseCollections: boolean;
   };
   hero: {
     home: HeroConfig;
@@ -61,6 +63,7 @@ export const DEFAULT_SETTINGS: OrbitSettings = {
     autoCollections: false,
     instantPosters: true,
     autoScanOms: true,
+    autoFranchiseCollections: true,
   },
   hero: {
     home: { ...DEFAULT_HERO, source: 'trending_all', count: 10, seed: 3 },

@@ -146,6 +146,9 @@ export interface OrbitPlexClient {
   themeUrl(path: string): string | null;
   getThemeUrl(ratingKey: string): Promise<string | null>;
   resolveShowTheme(node: OrbitNode): Promise<string | null>;
+  findTitleMetadata?(
+    node: OrbitNode,
+  ): Promise<{ plexKey?: string; poster?: string | null; backdrop?: string | null; theme?: string | null; tmdbId?: number | null } | null>;
   fetchMetadata(ratingKey: string): Promise<OrbitNode | null>;
   fetchDetails(ratingKey: string): Promise<{
     overview?: string;

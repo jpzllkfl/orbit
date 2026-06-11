@@ -164,8 +164,22 @@ export function CollectionPoster({ node }: { node: OrbitNode }) {
   useEffect(() => {
     if (!visible) return;
     const p = collectionCoverArt(node);
-    if (p) setPoster(p);
-  }, [node.id, visible, node.poster]);
+    if (p) {
+      setPoster(p);
+      return;
+    }
+    let alive = true;
+    Lib.fetchCollectionImages(node).then((imgs) => {
+      const url = imgs?.posters?.[0] || imgs?.backdrops?.[0];
+      if (alive && url) {
+        collArtCache[node.id] = url;
+        setPoster(url);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [node.id, visible, node.poster, node.tmdbId, node.title]);
 
   if (poster) {
     return (
@@ -348,6 +362,12 @@ export const CollectionCard = memo(function CollectionCard({
           {I.image({})}
         </div>
       )}
+      <div className="card-foot">
+        <div className="t">{node.title}</div>
+        <div className="sub">
+          <span>{OT.countDeep(node).films} title{OT.countDeep(node).films === 1 ? '' : 's'}</span>
+        </div>
+      </div>
     </button>
   );
 });
@@ -424,6 +444,7 @@ export function FeaturedCollectionsHero({
         <div className="spot-coll-poster" key={cur.id}>
           <CollectionPoster node={cur} />
         </div>
+        <h2 className="spot-title disp">{cur.title}</h2>
         <div className="spot-meta">
           {films} title{films !== 1 ? 's' : ''}
           {colls ? ` · ${colls} sub-collection${colls > 1 ? 's' : ''}` : ''}

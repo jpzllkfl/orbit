@@ -230,6 +230,21 @@ window.OrbitLib = (function () {
       saveCache();
       return data;
     }
+    const Plex = window.OrbitPlex;
+    if (Plex?.connected && Plex.findTitleMetadata) {
+      const plexMeta = await Plex.findTitleMetadata(node);
+      if (plexMeta?.poster || plexMeta?.backdrop) {
+        const data = {
+          poster: plexMeta.poster || null,
+          backdrop: plexMeta.backdrop || plexMeta.poster || null,
+          tmdbId: plexMeta.tmdbId || node.tmdbId,
+          plex: true,
+        };
+        cache[k] = data;
+        saveCache();
+        return data;
+      }
+    }
     if (inflight.has(k)) return inflight.get(k);
     const p = enqueueResolve(async () => {
       try {
@@ -384,7 +399,10 @@ window.OrbitLib = (function () {
   async function fetchCollectionImages(node) {
     if (!node) return null;
     try {
-      const j = await artApi('/collection-images', { title: node.title });
+      const j = await artApi('/collection-images', {
+        title: node.title,
+        tmdbId: node.tmdbId || '',
+      });
       return { posters: j.posters || [], backdrops: j.backdrops || [] };
     } catch (e) { return null; }
   }

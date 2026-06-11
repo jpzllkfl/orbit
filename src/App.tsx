@@ -22,7 +22,9 @@ import { useFeaturedHero } from './hooks/useFeaturedHero';
 import { useOrbitBoot } from './hooks/useOrbitBoot';
 import { nextEpisodeAfter } from './lib/nextEpisode';
 import { isTitleInLibrary, matchPartsToLibrary } from './lib/franchiseMatch';
+import { enrichTreeFromPlex } from './lib/enrichFromPlex';
 import { maybeAutoScanOms } from './lib/omsAutoScan';
+import { applyFranchiseCollectionsToTree } from './lib/tmdbFranchiseCollections';
 import { invalidateTitleIndex, searchTitles, similarTitles, sortedTitlesForScope, titleNodes } from './lib/treeIndex';
 import { preloadKnownPosters } from './lib/posterPreload';
 import { loadSettings } from './lib/settings';
@@ -139,6 +141,8 @@ export default function App() {
   const searchRef = useRef<HTMLInputElement>(null);
   const treeRef = useRef(tree);
   const omsAutoScanDone = useRef(false);
+  const plexEnrichDone = useRef(false);
+  const franchiseCollDone = useRef(false);
   const [desktopUpdate, setDesktopUpdate] = useState<UpdateStatus | null>(null);
   const [mobSearchOpen, setMobSearchOpen] = useState(false);
 
@@ -321,6 +325,33 @@ export default function App() {
     omsAutoScanDone.current = true;
     void (async () => {
       if (await maybeAutoScanOms(true)) await mergeOmsAfterScan();
+    })();
+  }, [libraryReady]);
+
+  useEffect(() => {
+    if (!libraryReady || plexEnrichDone.current) return;
+    plexEnrichDone.current = true;
+    void (async () => {
+      const enriched = await enrichTreeFromPlex(treeRef.current);
+      if (enriched) {
+        setTree(enriched);
+        persistTree(enriched);
+        setVer((v) => v + 1);
+      }
+    })();
+  }, [libraryReady]);
+
+  useEffect(() => {
+    if (!libraryReady || franchiseCollDone.current) return;
+    franchiseCollDone.current = true;
+    void (async () => {
+      const withFranchises = await applyFranchiseCollectionsToTree(treeRef.current);
+      if (withFranchises) {
+        setTree(withFranchises);
+        persistTree(withFranchises);
+        invalidateTitleIndex();
+        setVer((v) => v + 1);
+      }
     })();
   }, [libraryReady]);
 
@@ -711,7 +742,7 @@ export default function App() {
     });
   }
 
-  async function addFranchise(cr: { tmdbId: number; title: string; overview?: string }) {
+  async function addFranchise(cr: { tmdbId: number; title: string; overview?: string; poster?: string | null }) {
     const parts = await Lib.collectionParts(cr.tmdbId);
     const owned = matchPartsToLibrary(titleNodes(tree), parts);
     if (!owned.length) {
@@ -721,13 +752,18 @@ export default function App() {
       return 0;
     }
     const kids = owned.map((n) => structuredClone({ ...n, id: newId(n.type === 'show' ? 's' : 'm') }));
+    const collTitle = cr.title.replace(/\s*Collection$/i, '');
     const coll: OrbitNode = {
       id: newId('c'),
       type: 'collection',
-      title: cr.title.replace(/\s*Collection$/i, ''),
+      title: collTitle,
+      tmdbId: cr.tmdbId,
+      poster: cr.poster || undefined,
+      backdrop: undefined,
       blurb: cr.overview || '',
       children: kids,
     };
+    if (cr.poster) Lib.seed(coll, { poster: cr.poster, backdrop: cr.poster, tmdbId: cr.tmdbId });
     addToCurrent(coll);
     if (owned.length < parts.length) {
       window.alert(

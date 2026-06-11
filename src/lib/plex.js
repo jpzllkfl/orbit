@@ -355,6 +355,65 @@ window.OrbitPlex = (function () {
     return (s || '').trim().toLowerCase();
   }
 
+  const titleMetaCache = new Map();
+
+  function tmdbIdFromGuid(metadata) {
+    for (const g of asList(metadata?.Guid)) {
+      const id = g && g.id;
+      if (id && String(id).startsWith('tmdb://')) return Number(String(id).slice(7)) || null;
+    }
+    return null;
+  }
+
+  /** Match a library title to Plex metadata for posters, plexKey, and theme path. */
+  async function findTitleMetadata(node) {
+    if (!conn || !node || node.type === 'collection') return null;
+    const kind = node.type === 'show' ? 'show' : 'movie';
+    const cacheKey = `${kind}:${node.tmdbId || ''}:${normShowTitle(node.title)}:${node.year || ''}`;
+    if (titleMetaCache.has(cacheKey)) return titleMetaCache.get(cacheKey);
+
+    let match = null;
+    if (node.plexKey) {
+      try {
+        const j = await api('/library/metadata/' + node.plexKey);
+        match = (j.MediaContainer && j.MediaContainer.Metadata && j.MediaContainer.Metadata[0]) || null;
+      } catch (e) {
+        /* search fallback */
+      }
+    }
+    if (!match) {
+      try {
+        const j = await api('/search?query=' + encodeURIComponent(node.title || '') + '&limit=25');
+        const hits = asList(j.MediaContainer && j.MediaContainer.Metadata).filter((m) => m.type === kind);
+        if (node.tmdbId) {
+          const guid = 'tmdb://' + node.tmdbId;
+          match = hits.find((h) => asList(h.Guid).some((g) => g.id === guid));
+        }
+        if (!match && node.year) {
+          match = hits.find(
+            (h) => Number(h.year) === Number(node.year) && normShowTitle(h.title) === normShowTitle(node.title),
+          );
+        }
+        if (!match) match = hits.find((h) => normShowTitle(h.title) === normShowTitle(node.title));
+      } catch (e) {
+        match = null;
+      }
+    }
+    if (!match) {
+      titleMetaCache.set(cacheKey, null);
+      return null;
+    }
+    const meta = {
+      plexKey: String(match.ratingKey),
+      poster: imgUrl(match.thumb),
+      backdrop: imgUrl(match.art) || imgUrl(match.thumb),
+      theme: match.theme || null,
+      tmdbId: tmdbIdFromGuid(match) || node.tmdbId || null,
+    };
+    titleMetaCache.set(cacheKey, meta);
+    return meta;
+  }
+
   /** Theme for a show — uses plexKey, cached theme path, or Plex library search (OMS-only nodes). */
   async function resolveShowTheme(node) {
     if (!conn || !node || node.type !== 'show') return null;
@@ -1024,7 +1083,7 @@ window.OrbitPlex = (function () {
     // auth + discovery (real)
     createPin, authUrl, pollPin, signIn, resources, bestConnection, connectServer, restoreFromConnState,
     // library + media (real)
-    sections, buildTree, fetchCollections, img, imgUrl, mediaUrl, themeUrl, getThemeUrl, resolveShowTheme, api, toTitle,
+    sections, buildTree, fetchCollections, img, imgUrl, mediaUrl, themeUrl, getThemeUrl, resolveShowTheme, findTitleMetadata, api, toTitle,
     fetchMetadata, fetchDetails, fetchSubtitleStreamUrl, resolvePlayback, pickShowEpisode, fetchSeasons, fetchShowLeaves, scrobble, unscrobble, reportProgress,
     fetchHomeHub, fetchContinueWatching, fetchOnDeck,
     sendTimeline, pingTranscodeSession, getPlaybackSession, startPlaybackSession, beginNewPlayback: startPlaybackSession, isLocalConnection,

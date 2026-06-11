@@ -308,8 +308,21 @@ export function SettingsView({
             </label>
             <label className="settings-row check">
               <span>
+                <strong>Auto franchise collections</strong>
+                <small>Plex-style — groups your movies into TMDB franchises (Marvel, DC, etc.) when you own 2+ films</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={settings.library.autoFranchiseCollections ?? true}
+                onChange={(e) =>
+                  update({ library: { ...settings.library, autoFranchiseCollections: e.target.checked } })
+                }
+              />
+            </label>
+            <label className="settings-row check">
+              <span>
                 <strong>Auto decade/genre collections</strong>
-                <small>Off by default. For Iron Man, MCU, etc. use Curate → Add → Search → Build franchise</small>
+                <small>Off by default — creates 1920s, Sci-Fi buckets instead of franchises</small>
               </span>
               <input
                 type="checkbox"

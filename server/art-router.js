@@ -95,23 +95,32 @@ export function createArtRouter() {
   router.get('/collection-images', async (req, res) => {
     try {
       const title = typeof req.query.title === 'string' ? req.query.title.trim() : '';
+      const tmdbId = Number(req.query.tmdbId) || 0;
       const apiKey = resolveTmdbKey(req.headers['x-orbit-tmdb-key']);
-      if (!apiKey || !title) {
-        res.json({ posters: [], backdrops: [] });
-        return;
-      }
-      const searchUrl = withTmdbKey(
-        `${TMDB}/search/collection?query=${encodeURIComponent(title)}&language=en-US`,
-        apiKey,
-      );
-      const searchRes = await fetch(searchUrl, { headers: tmdbAuthHeaders(apiKey) });
-      const searchJson = await searchRes.json();
-      const hit = searchJson.results?.[0];
-      if (!hit) {
+      if (!apiKey || (!title && !tmdbId)) {
         res.json({ posters: [], backdrops: [] });
         return;
       }
       const img = (p, size) => (p ? `https://image.tmdb.org/t/p/${size}${p}` : null);
+      let hit = null;
+      if (tmdbId) {
+        const detailUrl = withTmdbKey(`${TMDB}/collection/${tmdbId}?language=en-US`, apiKey);
+        const detailRes = await fetch(detailUrl, { headers: tmdbAuthHeaders(apiKey) });
+        if (detailRes.ok) hit = await detailRes.json();
+      }
+      if (!hit?.id && title) {
+        const searchUrl = withTmdbKey(
+          `${TMDB}/search/collection?query=${encodeURIComponent(title)}&language=en-US`,
+          apiKey,
+        );
+        const searchRes = await fetch(searchUrl, { headers: tmdbAuthHeaders(apiKey) });
+        const searchJson = await searchRes.json();
+        hit = searchJson.results?.[0] || null;
+      }
+      if (!hit) {
+        res.json({ posters: [], backdrops: [] });
+        return;
+      }
       const posters = [hit.poster_path, hit.backdrop_path].map((p) => img(p, 'w500')).filter(Boolean);
       res.json({
         posters,

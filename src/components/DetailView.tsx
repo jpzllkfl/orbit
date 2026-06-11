@@ -291,6 +291,11 @@ export function DetailView({
 
     (async () => {
       let url = node.theme ? Plex.themeUrl(node.theme) : null;
+      if (!url && Plex.connected && isShow && Plex.findTitleMetadata && !node.plexKey) {
+        const meta = await Plex.findTitleMetadata(node);
+        if (meta?.theme) url = Plex.themeUrl(meta.theme);
+        else if (meta?.plexKey) url = await Plex.getThemeUrl(meta.plexKey);
+      }
       if (!url && Plex.connected && isShow) url = await Plex.resolveShowTheme(node);
       if (!alive || !url) return;
       setHasTheme(true);
