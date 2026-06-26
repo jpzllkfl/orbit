@@ -1,7 +1,7 @@
 import type { OrbitNode } from '../types/orbit';
 import { decorateOmsLibraries } from './autoCollections';
 import { orbitMediaFetch } from './orbitApi';
-import { mediaApiUrl } from './orbitServer';
+import { omsStreamUrlForItem, omsTranscodeUrlForItem } from './omsStreamUrls';
 
 export type OmsImportResult = {
   tree: OrbitNode | null;
@@ -87,11 +87,11 @@ export function removeOmsLibraryFromTree(
 }
 
 export function omsStreamUrl(itemId: string): string {
-  return mediaApiUrl('/api/media/stream/' + encodeURIComponent(itemId));
+  return omsStreamUrlForItem(itemId);
 }
 
 export function omsTranscodeUrl(itemId: string): string {
-  return mediaApiUrl('/api/media/transcode/' + encodeURIComponent(itemId) + '/stream.m3u8');
+  return omsTranscodeUrlForItem(itemId);
 }
 
 export function nodeHasOmsPlayback(node: OrbitNode): boolean {

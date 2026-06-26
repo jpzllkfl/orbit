@@ -11,6 +11,7 @@ import { DEFAULT_OMS_LIBRARIES } from './catalog.js';
 import { scanAllLibraries, seedDefaultLibraries } from './seed.js';
 import { streamMediaItem } from './stream.js';
 import { ensureOmsTranscode, serveTranscodeFile } from './transcode.js';
+import { relayAuthMiddleware, relayStreamItem, relayTranscodeFile } from './relay.js';
 import { resolveTmdbKey } from '../tmdb-config.js';
 
 export function createMediaRouter() {
@@ -131,6 +132,9 @@ export function createMediaRouter() {
       if (!res.headersSent) res.status(500).json({ error: e.message || 'Stream failed.' });
     }
   });
+
+  router.get('/relay/stream/:id', relayAuthMiddleware, relayStreamItem);
+  router.get('/relay/transcode/:id/:file', relayAuthMiddleware, relayTranscodeFile);
 
   router.get('/transcode/:id/:file', async (req, res) => {
     try {

@@ -1122,7 +1122,14 @@ export default function App() {
     let ep: Episode | null = episode || null;
     if (full.type === 'show' && !ep) {
       const cw = Progress.list().find((r) => r.node.id === full.id && r.episode);
-      if (cw?.episode) ep = cw.episode as Episode;
+      if (cw?.episode) {
+        ep = {
+          season: cw.episode.season,
+          n: cw.episode.n,
+          title: cw.episode.title,
+          omsItemId: cw.episode.omsItemId,
+        };
+      }
     }
     if (full.type === 'show' && ep) {
       ep = await resolveEpisodeOmsId(full, ep);
@@ -1133,7 +1140,10 @@ export default function App() {
   const handlePlayNext = useCallback(async () => {
     if (!player?.node || player.node.type !== 'show' || !player.episode) return;
     const next = await nextEpisodeAfter(player.node, player.episode);
-    if (next) setPlayer({ node: player.node, episode: next });
+    if (next) {
+      const ep = await resolveEpisodeOmsId(player.node, next);
+      setPlayer({ node: player.node, episode: ep });
+    }
   }, [player]);
 
   useEffect(() => {

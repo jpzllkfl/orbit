@@ -2,10 +2,12 @@ import type { Episode, OrbitNode } from '../types/orbit';
 import { OrbitMedia } from './orbitMedia';
 import { isDesktopApp } from './isDesktop';
 import { DESKTOP_MEDIA_LS, getOmsPlaybackOrigin, normalizeOrigin } from './orbitServer';
+import { shouldUseMediaRelay } from './omsStreamUrls';
 
 /** True when this browser can reach the Orbit Media Server that owns local file paths. */
 export function canReachOmsPlayback(): boolean {
   if (isDesktopApp()) return true;
+  if (shouldUseMediaRelay()) return true;
   if (typeof window === 'undefined') return false;
   const page = window.location.origin;
   const playback = getOmsPlaybackOrigin();

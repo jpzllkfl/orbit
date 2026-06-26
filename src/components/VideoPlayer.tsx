@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type SVGProps } from 'react';
 import { Plex, Progress } from '../lib';
 import { attachHlsSource, videoHasDecodedAudio, type HlsHandle } from '../lib/hlsPlayer';
 import { canReachOmsPlayback, omsPlaybackId } from '../lib/omsPlayback';
+import { shouldUseMediaRelay } from '../lib/omsStreamUrls';
 import { bindBoundsSync, hasNativePlayer, nativePlayerInfo, videoBounds } from '../lib/nativePlayer';
 import { loadSettings } from '../lib/settings';
 import type { Episode, OrbitNode } from '../types/orbit';
@@ -233,7 +234,7 @@ export function VideoPlayer({
       const omsId = omsPlaybackId(node, episode);
       if (omsId) {
         omsPlaybackRef.current = true;
-        if (!canReachOmsPlayback()) {
+        if (!canReachOmsPlayback() && !shouldUseMediaRelay()) {
           setError(
             'This library was scanned on your desktop. Open Orbit on the Plex PC, or use the same network with desktop streaming enabled.',
           );
@@ -366,7 +367,7 @@ export function VideoPlayer({
       const omsId = omsPlaybackId(node, episode);
       if (omsId) {
         omsPlaybackRef.current = true;
-        if (!canReachOmsPlayback()) {
+        if (!canReachOmsPlayback() && !shouldUseMediaRelay()) {
           setError(
             'This library was scanned on your desktop. Open Orbit on the Plex PC to play files, or enable desktop streaming on the same network.',
           );

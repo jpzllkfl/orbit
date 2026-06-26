@@ -61,7 +61,7 @@ export interface HomeRow {
 export interface ProgressRecord {
   key: string;
   node: OrbitNode;
-  episode?: { season: number; n: number; title?: string } | null;
+  episode?: { season: number; n: number; title?: string; omsItemId?: string } | null;
   t?: number;
   d?: number;
   pct?: number;
@@ -70,5 +70,5 @@ export interface ProgressRecord {
 
 export interface PlayPayload {
   node: OrbitNode;
-  episode?: { season: number; n: number; title?: string } | null;
+  episode?: { season: number; n: number; title?: string; omsItemId?: string } | null;
 }

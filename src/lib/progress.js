@@ -8,8 +8,8 @@ window.OrbitProgress = (function () {
 
   function key(node, episode) { return node.id + (episode ? ':s' + episode.season + 'e' + episode.n : ''); }
   function snap(node) {
-    const { id, title, year, type, genre, rating, runtime, seasons, epsPerSeason, plexKey, partKey } = node;
-    return { id, title, year, type, genre, rating, runtime, seasons, epsPerSeason, plexKey, partKey };
+    const { id, title, year, type, genre, rating, runtime, seasons, epsPerSeason, plexKey, partKey, omsItemId, omsLibraryId, omsShowTitle } = node;
+    return { id, title, year, type, genre, rating, runtime, seasons, epsPerSeason, plexKey, partKey, omsItemId, omsLibraryId, omsShowTitle };
   }
 
   function set(node, episode, t, d) {
@@ -20,7 +20,14 @@ window.OrbitProgress = (function () {
     if (pct >= 0.97) { delete m[k]; write(m); invalidateList(); return; }   // finished → drop
     m[k] = {
       key: k, node: snap(node),
-      episode: episode ? { season: episode.season, n: episode.n, title: episode.title } : null,
+      episode: episode
+        ? {
+            season: episode.season,
+            n: episode.n,
+            title: episode.title,
+            omsItemId: episode.omsItemId,
+          }
+        : null,
       t, d, pct, updatedAt: Date.now(),
     };
     write(m);
