@@ -25,7 +25,51 @@ export function canReachOmsPlayback(): boolean {
 }
 
 export function omsPlaybackId(node: OrbitNode, episode?: Episode | null): string | null {
-  return episode?.omsItemId || node.omsItemId || null;
+  if (episode?.omsItemId) return episode.omsItemId;
+  if (node.type === 'movie') {
+    if (node.omsItemId) return node.omsItemId;
+    // OMS items use mi_* ids; synced trees may keep id without omsItemId/omsPath
+    if (node.omsPath || node.id?.startsWith('mi_')) return node.id;
+    return null;
+  }
+  if (node.type === 'show') {
+    return null;
+  }
+  return node.omsItemId || null;
+}
+
+function normTitle(s: string) {
+  return (s || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+}
+
+/** Resolve OMS file id for a movie when sync stripped omsItemId but kept metadata. */
+export async function resolveMovieOmsId(node: OrbitNode): Promise<OrbitNode> {
+  if (node.type !== 'movie' || omsPlaybackId(node, null)) return node;
+  const libId = node.omsLibraryId;
+  if (!libId) return node;
+  try {
+    const items = await OrbitMedia.listItems(libId, 2000);
+    const want = normTitle(node.title);
+    const hit =
+      items.find((i) => i.type === 'movie' && i.id === node.id) ||
+      items.find(
+        (i) =>
+          i.type === 'movie' &&
+          normTitle(i.title) === want &&
+          (!node.year || !i.year || i.year === node.year),
+      ) ||
+      items.find((i) => i.type === 'movie' && normTitle(i.title) === want);
+    if (hit) {
+      return {
+        ...node,
+        omsItemId: hit.id,
+        omsPath: hit.filePath || node.omsPath,
+      };
+    }
+  } catch {
+    /* offline */
+  }
+  return node;
 }
 
 /** Fill episode.omsItemId from OMS when the synced tree only has show-level metadata. */

@@ -787,6 +787,7 @@ window.OrbitPlex = (function () {
   function proxyStreamUrl(url) {
     if (!USE_PROXY || !conn || !url) return url;
     if (String(url).startsWith('/api/plex/media')) return url;
+    if (String(url).includes('/api/media/')) return url;
     try {
       const base = new URL(conn.url);
       const u = /^https?:\/\//i.test(url) ? new URL(url) : new URL(url, base);

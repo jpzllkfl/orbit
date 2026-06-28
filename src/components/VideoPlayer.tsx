@@ -121,6 +121,14 @@ function shouldResume() {
   return loadSettings().playback.resumePlayback !== false;
 }
 
+function browserCanDirectPlayUrl(url: string, node: OrbitNode): boolean {
+  if (url.includes('.m3u8')) return true;
+  const pathHint = (node.omsPath || url || '').toLowerCase();
+  if (/\.(mkv|avi|wmv|flv|ts|m2ts)(\?|$)/i.test(pathHint)) return false;
+  if (node.container && !/mp4|webm|mov|m4v/i.test(node.container)) return false;
+  return true;
+}
+
 async function mediaStream(node: OrbitNode, q: string, episode?: Episode | null) {
   const omsId = omsPlaybackId(node, episode);
   if (omsId) {
@@ -251,8 +259,11 @@ export function VideoPlayer({
         const rec = Progress.get(node, episode || null);
         const startSec = shouldResume() && rec?.t && rec.t > 12 ? rec.t : 0;
         const bounds = videoBounds(vref.current);
+        const playNative = async (url: string) => {
+          await window.orbitNative!.play({ url, startSec, bounds: bounds || undefined });
+        };
         try {
-          await window.orbitNative.play({ url: info.url, startSec, bounds: bounds || undefined });
+          await playNative(info.url);
           if (!alive) return;
           window.clearTimeout(nativeStall);
           setWaiting(false);
@@ -260,6 +271,19 @@ export function VideoPlayer({
           setPlaying(true);
         } catch {
           if (!alive) return;
+          if (info.fallbackUrl) {
+            try {
+              await playNative(info.fallbackUrl);
+              if (!alive) return;
+              window.clearTimeout(nativeStall);
+              setWaiting(false);
+              setReady(true);
+              setPlaying(true);
+              return;
+            } catch {
+              /* fall through to HTML5 */
+            }
+          }
           setNativeMode(false);
         }
         return;
@@ -307,7 +331,7 @@ export function VideoPlayer({
       window.clearTimeout(nativeStall);
       window.orbitNative?.stop().catch(() => {});
     };
-  }, [nativeMode, node, episode?.season, episode?.n]);
+  }, [nativeMode, node, episode?.season, episode?.n, episode?.omsItemId, node.omsItemId]);
 
   useEffect(() => {
     if (!nativeMode || !ready) return;
@@ -383,9 +407,12 @@ export function VideoPlayer({
         }
         playNodeRef.current = node;
         setPlayNode(node);
-        streamModeRef.current = 'direct';
         streamFallback.current = info.fallbackUrl || null;
-        setStreamUrl(info.url);
+        const useDirect =
+          nativeMode || inElectron || browserCanDirectPlayUrl(info.url, node);
+        const url = useDirect ? info.url : info.fallbackUrl || info.url;
+        streamModeRef.current = url.includes('.m3u8') ? 'transcode' : 'direct';
+        setStreamUrl(url);
         return;
       }
       if (Plex.connected && (node.plexKey || node.partKey)) {
@@ -426,7 +453,7 @@ export function VideoPlayer({
     return () => {
       alive = false;
     };
-  }, [node, episode?.season, episode?.n, episode?.omsItemId, nativeMode, nativeCheckDone]);
+  }, [node, episode?.season, episode?.n, episode?.omsItemId, node.omsItemId, node.id, nativeMode, nativeCheckDone]);
 
   onStreamFailRef.current = () => {
     const now = Date.now();
@@ -454,7 +481,9 @@ export function VideoPlayer({
       if (omsPlaybackRef.current) {
         setError(
           streamModeRef.current === 'transcode' || fb?.includes('.m3u8')
-            ? 'Transcode failed. Install ffmpeg on this PC (winget install ffmpeg) or use Orbit Desktop with mpv.'
+            ? shouldUseMediaRelay()
+              ? 'Transcode failed. Keep Orbit Desktop running on your Plex PC with ffmpeg installed (winget install ffmpeg).'
+              : 'Transcode failed. Install ffmpeg on this PC (winget install ffmpeg) or use Orbit Desktop with mpv.'
             : 'Could not stream this file from Orbit Media Server. Check that the file still exists on disk.',
         );
         setWaiting(false);
@@ -529,10 +558,10 @@ export function VideoPlayer({
       ? 45000
       : omsPlaybackRef.current
         ? streamFallback.current
-          ? 10000
+          ? 12000
           : 15000
         : streamFallback.current
-          ? 2500
+          ? 8000
           : 12000;
     const stallTimer = window.setTimeout(() => {
       if (!v.error && v.currentTime < 0.5 && v.readyState < 2) onStreamFailRef.current();
@@ -644,7 +673,7 @@ export function VideoPlayer({
         setReady(false);
         setStreamUrl(fb);
       }
-    }, 2000);
+    }, omsPlaybackRef.current ? 2500 : 4000);
 
     const audioWatchdog = window.setTimeout(() => {
       if (cancelled || v.paused || v.currentTime < 1) return;

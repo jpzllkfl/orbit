@@ -25,7 +25,7 @@ import { isTitleInLibrary, matchPartsToLibrary } from './lib/franchiseMatch';
 import { enrichTreeFromPlex } from './lib/enrichFromPlex';
 import { shouldImportPlexLibraries } from './lib/plexMetadataMode';
 import { maybeAutoScanOms } from './lib/omsAutoScan';
-import { resolveEpisodeOmsId } from './lib/omsPlayback';
+import { resolveEpisodeOmsId, resolveMovieOmsId } from './lib/omsPlayback';
 import { applyFranchiseCollectionsToTree } from './lib/tmdbFranchiseCollections';
 import { invalidateTitleIndex, searchTitles, similarTitles, sortedTitlesForScope, titleNodes } from './lib/treeIndex';
 import { preloadKnownPosters } from './lib/posterPreload';
@@ -1118,7 +1118,13 @@ export default function App() {
   }
 
   async function playTitle(node: OrbitNode, episode?: Episode | null) {
-    const full = OT.findById(tree, node.id) || node;
+    let full = OT.findById(tree, node.id) || node;
+    if (full.type === 'movie') {
+      if (!full.omsItemId && (full.omsPath || full.id?.startsWith('mi_'))) {
+        full = { ...full, omsItemId: full.id };
+      }
+      full = await resolveMovieOmsId(full);
+    }
     let ep: Episode | null = episode || null;
     if (full.type === 'show' && !ep) {
       const cw = Progress.list().find((r) => r.node.id === full.id && r.episode);
@@ -1129,6 +1135,25 @@ export default function App() {
           title: cw.episode.title,
           omsItemId: cw.episode.omsItemId,
         };
+      } else if (full.omsLibraryId && full.omsShowTitle) {
+        try {
+          const seasons = await OrbitMedia.showSeasons(full.omsLibraryId, full.omsShowTitle);
+          const firstSeason = [...seasons].sort((a, b) => a.season - b.season)[0];
+          if (firstSeason) {
+            const eps = await OrbitMedia.showEpisodes(full.omsLibraryId, full.omsShowTitle, firstSeason.season);
+            const first = [...eps].sort((a, b) => a.episode - b.episode)[0];
+            if (first) {
+              ep = {
+                season: first.season,
+                n: first.episode,
+                title: first.title,
+                omsItemId: first.id,
+              };
+            }
+          }
+        } catch {
+          /* offline */
+        }
       }
     }
     if (full.type === 'show' && ep) {

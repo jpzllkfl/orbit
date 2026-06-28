@@ -1,6 +1,18 @@
 import Hls from 'hls.js';
 import { Plex } from './index';
 
+/** OMS direct/transcode routes — must not go through the Plex media proxy. */
+function isOrbitMediaUrl(url: string): boolean {
+  if (!url) return false;
+  if (url.startsWith('/api/media/')) return true;
+  try {
+    const u = /^https?:\/\//i.test(url) ? new URL(url) : new URL(url, window.location.origin);
+    return u.pathname.startsWith('/api/media/');
+  } catch {
+    return url.includes('/api/media/');
+  }
+}
+
 export type HlsHandle = {
   destroy: () => void;
 };
@@ -37,7 +49,8 @@ export function attachHlsSource(
       fragLoadingTimeOut: 60000,
       fragLoadingMaxRetry: 8,
       fetchSetup: (context, initParams) => {
-        const proxied = Plex.proxyStreamUrl(context.url);
+        const url = context.url;
+        const proxied = isOrbitMediaUrl(url) ? url : Plex.proxyStreamUrl(url);
         return new Request(proxied, initParams);
       },
     });

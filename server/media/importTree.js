@@ -46,7 +46,7 @@ function artFromRow(row) {
   };
 }
 
-function movieNode(row) {
+function movieNode(row, libraryId) {
   const art = artFromRow(row);
   return {
     id: row.id,
@@ -60,6 +60,7 @@ function movieNode(row) {
     blurb: row.overview ? String(row.overview).slice(0, 240) : undefined,
     omsItemId: row.id,
     omsPath: row.file_path,
+    omsLibraryId: libraryId,
     addedAt: row.scanned_at || null,
   };
 }
@@ -93,8 +94,6 @@ function buildTvChildren(rows, libraryId) {
       blurb: withMeta.overview ? String(withMeta.overview).slice(0, 240) : undefined,
       omsLibraryId: libraryId,
       omsShowTitle: withMeta.show_title || showTitle,
-      omsItemId: first.id,
-      omsPath: first.file_path,
       addedAt: Math.max(...eps.map((e) => e.scanned_at || 0)) || null,
     });
   }
@@ -105,7 +104,7 @@ function buildTvChildren(rows, libraryId) {
 function buildLibraryNode(lib) {
   const rows = allItemsForLibrary(lib.id);
   const movieRows = lib.type === 'movie' ? dedupeMovieRows(rows) : rows;
-  const children = lib.type === 'movie' ? movieRows.map(movieNode) : buildTvChildren(rows, lib.id);
+  const children = lib.type === 'movie' ? movieRows.map((r) => movieNode(r, lib.id)) : buildTvChildren(rows, lib.id);
   return {
     id: newId('lib'),
     type: 'library',
