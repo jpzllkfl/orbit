@@ -6,6 +6,18 @@ export type YoutubeTvStatus = {
   expiresAt?: string | null;
 };
 
+export class YoutubeTvApiError extends Error {
+  needsReconnect: boolean;
+  status: number;
+
+  constructor(message: string, status: number, needsReconnect = false) {
+    super(message);
+    this.name = 'YoutubeTvApiError';
+    this.status = status;
+    this.needsReconnect = needsReconnect;
+  }
+}
+
 export type YoutubeTvChannel = {
   id: string;
   name: string;
@@ -51,8 +63,18 @@ export async function disconnectYoutubeTv(): Promise<void> {
 
 export async function fetchYoutubeTvChannels(): Promise<YoutubeTvChannel[]> {
   const res = await orbitApiFetch('/api/youtube-tv/channels');
-  const j = (await res.json().catch(() => ({}))) as { channels?: YoutubeTvChannel[]; error?: string };
-  if (!res.ok) throw new Error(j.error || `Could not load channels (${res.status})`);
+  const j = (await res.json().catch(() => ({}))) as {
+    channels?: YoutubeTvChannel[];
+    error?: string;
+    needsReconnect?: boolean;
+  };
+  if (!res.ok) {
+    throw new YoutubeTvApiError(
+      j.error || `Could not load channels (${res.status})`,
+      res.status,
+      Boolean(j.needsReconnect),
+    );
+  }
   return j.channels || [];
 }
 

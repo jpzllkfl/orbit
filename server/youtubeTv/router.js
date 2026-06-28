@@ -8,12 +8,22 @@ import {
   loadCredentials,
 } from './store.js';
 import {
+  classifyYoutubeTvError,
   disconnect,
   listChannels,
   pollConnect,
   resolveStream,
   startConnect,
 } from './client.js';
+
+function respondYoutubeTvError(res, err, fallback) {
+  const { message, needsReconnect } = classifyYoutubeTvError(err);
+  if (needsReconnect) clearCredentials(res.locals.orbitUserId);
+  res.status(needsReconnect ? 401 : 502).json({
+    error: message || fallback,
+    needsReconnect,
+  });
+}
 
 function bearerToken(req) {
   const h = req.headers.authorization || '';
@@ -25,6 +35,7 @@ function requireAuth(req, res, next) {
   const user = resolveSession(bearerToken(req));
   if (!user) return res.status(401).json({ error: 'Sign in to Orbit first.' });
   req.orbitUser = user;
+  res.locals.orbitUserId = user.id;
   next();
 }
 
@@ -89,7 +100,7 @@ export function createYoutubeTvRouter() {
       const channels = await listChannels(req.orbitUser.id);
       res.json({ channels });
     } catch (e) {
-      res.status(502).json({ error: e.message || 'Could not load YouTube TV channels.' });
+      respondYoutubeTvError(res, e, 'Could not load YouTube TV channels.');
     }
   });
 
@@ -110,7 +121,7 @@ export function createYoutubeTvRouter() {
         title,
       });
     } catch (e) {
-      res.status(502).json({ error: e.message || 'Stream resolution failed.' });
+      respondYoutubeTvError(res, e, 'Stream resolution failed.');
     }
   });
 

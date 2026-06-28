@@ -6,6 +6,7 @@ import {
   fetchYoutubeTvChannels,
   fetchYoutubeTvStatus,
   resolveYoutubeTvStream,
+  YoutubeTvApiError,
   type YoutubeTvChannel,
 } from '../lib/youtubeTv';
 import { LiveTvPlayer } from './LiveTvPlayer';
@@ -58,6 +59,10 @@ export function LiveTvView({ onOpenConnections }: { onOpenConnections?: () => vo
       setPlexChannels(ch);
       setYttvChannels([]);
     } catch (e) {
+      if (e instanceof YoutubeTvApiError && e.needsReconnect) {
+        setYttvConnected(false);
+        setYttvChannels([]);
+      }
       setError(e instanceof Error ? e.message : 'Could not load channels.');
     } finally {
       setLoading(false);
