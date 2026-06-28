@@ -4,6 +4,7 @@ import { loadCredentials, saveCredentials } from './store.js';
 /** youtubei.js ClientType.TV value — not the shorthand key "TV". */
 const YTTV_CLIENT = 'TVHTML5';
 const YTTV_USER_AGENT = 'Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version';
+const UNPLUGGED_BROWSE_URL = 'https://tv.youtube.com/youtubei/v1/unplugged/browse';
 
 const pendingSessions = new Map();
 
@@ -17,12 +18,22 @@ function walk(obj, fn) {
   }
 }
 
+function errorMessageFrom(err) {
+  if (!err) return 'YouTube TV request failed.';
+  const base = err instanceof Error ? err.message : String(err);
+  const detail = err?.info;
+  if (typeof detail === 'string' && detail.trim()) {
+    const snippet = detail.trim().slice(0, 220);
+    if (!base.includes(snippet.slice(0, 40))) return `${base} ${snippet}`;
+  }
+  return base;
+}
+
 export function classifyYoutubeTvError(err) {
-  const message =
-    err instanceof Error ? err.message : String(err || 'YouTube TV request failed.');
+  const message = errorMessageFrom(err);
   const needsReconnect = Boolean(
     err?.needsReconnect ||
-      /expired|reconnect|not connected|incomplete|invalid tokens|invalid authentication|credentials are/i.test(
+      /expired|reconnect|not connected|incomplete|invalid tokens|invalid authentication|credentials are|invalid credentials/i.test(
         message,
       ),
   );
@@ -88,19 +99,30 @@ function parseChannelsFromBrowse(data) {
   return channels.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function buildUnpluggedContext(yt) {
+function browseResponseSummary(data) {
+  if (!data || typeof data !== 'object') return 'empty response';
+  const keys = Object.keys(data).slice(0, 8).join(', ') || 'none';
+  const contentKeys = data.contents ? Object.keys(data.contents).join(', ') : 'no contents';
+  const rowCount = [];
+  walk(data, (node) => {
+    if (node?.epgRowRenderer) rowCount.push(1);
+  });
+  return `keys=${keys}; contents=${contentKeys}; epgRows=${rowCount.length}`;
+}
+
+function ensureTvSessionContext(yt) {
   const client = yt.session.context.client;
-  return {
-    client: {
-      hl: client.hl || 'en',
-      gl: client.gl || 'US',
-      visitorData: client.visitorData,
-      clientName: YTTV_CLIENT,
-      clientVersion: client.clientVersion,
-      userAgent: YTTV_USER_AGENT,
-    },
-    user: yt.session.context.user || { enableSafetyMode: false, lockedSafetyMode: false },
-  };
+  client.clientName = YTTV_CLIENT;
+  client.userAgent = YTTV_USER_AGENT;
+  if (!yt.session.context.user) {
+    yt.session.context.user = { enableSafetyMode: false, lockedSafetyMode: false };
+  }
+}
+
+function credentialsWithOAuthClient(yt, credentials) {
+  const client = yt.session.oauth?.client_id;
+  if (!client?.client_id) return credentials;
+  return { ...credentials, client };
 }
 
 async function ensureFreshAccessToken(yt, userId) {
@@ -113,9 +135,11 @@ async function ensureFreshAccessToken(yt, userId) {
   if (oauth.shouldRefreshToken()) {
     try {
       await oauth.refreshAccessToken();
-      saveCredentials(userId, oauth.oauth2_tokens);
+      saveCredentials(userId, credentialsWithOAuthClient(yt, oauth.oauth2_tokens));
     } catch (e) {
-      const err = new Error('YouTube TV session expired. Disconnect and reconnect in Connections.');
+      const err = new Error(
+        `YouTube TV session expired (${errorMessageFrom(e)}). Disconnect and reconnect in Connections.`,
+      );
       err.needsReconnect = true;
       throw err;
     }
@@ -124,33 +148,47 @@ async function ensureFreshAccessToken(yt, userId) {
 }
 
 async function fetchUnpluggedBrowse(yt, userId) {
-  const accessToken = await ensureFreshAccessToken(yt, userId);
-  const res = await fetch('https://tv.youtube.com/youtubei/v1/unplugged/browse', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      Origin: 'https://tv.youtube.com',
-      Referer: 'https://tv.youtube.com/',
-      'User-Agent': YTTV_USER_AGENT,
-    },
-    body: JSON.stringify({ context: buildUnpluggedContext(yt) }),
-    signal: AbortSignal.timeout(45000),
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    if (res.status === 401 || res.status === 403) {
+  await ensureFreshAccessToken(yt, userId);
+  ensureTvSessionContext(yt);
+
+  const url = new URL(UNPLUGGED_BROWSE_URL);
+  let response;
+  try {
+    response = await yt.session.http.fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: 'https://tv.youtube.com',
+        Referer: 'https://tv.youtube.com/',
+        'User-Agent': YTTV_USER_AGENT,
+      },
+      body: JSON.stringify({ context: yt.session.context }),
+      signal: AbortSignal.timeout(45000),
+    });
+  } catch (e) {
+    const msg = errorMessageFrom(e);
+    if (/401|403|invalid credentials/i.test(msg)) {
       const err = new Error('YouTube TV session expired. Disconnect and reconnect in Connections.');
       err.needsReconnect = true;
       throw err;
     }
-    throw new Error(`YouTube TV guide failed (${res.status}). ${text.slice(0, 180)}`);
+    throw new Error(`YouTube TV guide failed: ${msg.slice(0, 240)}`);
   }
+
+  let data;
   try {
-    return JSON.parse(text);
+    data = await response.json();
   } catch {
     throw new Error('YouTube TV returned an invalid guide response.');
   }
+
+  if (data?.error?.message) {
+    const err = new Error(`YouTube TV guide error: ${String(data.error.message).slice(0, 200)}`);
+    if (/auth|credential|expired|permission/i.test(data.error.message)) err.needsReconnect = true;
+    throw err;
+  }
+
+  return data;
 }
 
 export async function createAuthenticatedClient(userId) {
@@ -163,19 +201,22 @@ export async function createAuthenticatedClient(userId) {
   });
 
   yt.session.on('update-credentials', ({ credentials }) => {
-    saveCredentials(userId, credentials);
+    saveCredentials(userId, credentialsWithOAuthClient(yt, credentials));
   });
 
   try {
     await yt.session.signIn(stored.credentials);
+    if (stored.credentials.client && yt.session.oauth && !yt.session.oauth.client_id) {
+      yt.session.oauth.client_id = stored.credentials.client;
+    }
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = errorMessageFrom(e);
     if (/invalid tokens|refresh access token/i.test(msg)) {
       const err = new Error('YouTube TV credentials are incomplete. Disconnect and reconnect in Connections.');
       err.needsReconnect = true;
       throw err;
     }
-    throw e;
+    throw new Error(`YouTube TV sign-in failed: ${msg.slice(0, 220)}`);
   }
   return yt;
 }
@@ -205,7 +246,7 @@ export async function startConnect(userId) {
 
   yt.session.on('auth', ({ credentials }) => {
     resolved = true;
-    saveCredentials(userId, credentials);
+    saveCredentials(userId, credentialsWithOAuthClient(yt, credentials));
     pendingSessions.delete(userId);
     resolveAuth({ ok: true, credentials });
   });
@@ -247,7 +288,7 @@ export async function pollConnect(userId) {
     ]);
   } catch (e) {
     pendingSessions.delete(userId);
-    return { status: 'error', error: e.message || 'Sign-in failed' };
+    return { status: 'error', error: errorMessageFrom(e) || 'Sign-in failed' };
   }
   if (loadCredentials(userId)?.credentials) {
     return { status: 'connected' };
@@ -286,7 +327,9 @@ export async function listChannels(userId) {
   const browse = await fetchUnpluggedBrowse(yt, userId);
   const channels = parseChannelsFromBrowse(browse);
   if (!channels.length) {
-    throw new Error('No channels returned. Confirm your YouTube TV subscription is active.');
+    throw new Error(
+      `No channels in YouTube TV guide (${browseResponseSummary(browse)}). Confirm your subscription is active, then disconnect and reconnect.`,
+    );
   }
   return channels;
 }

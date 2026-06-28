@@ -63,14 +63,20 @@ export async function disconnectYoutubeTv(): Promise<void> {
 
 export async function fetchYoutubeTvChannels(): Promise<YoutubeTvChannel[]> {
   const res = await orbitApiFetch('/api/youtube-tv/channels');
-  const j = (await res.json().catch(() => ({}))) as {
-    channels?: YoutubeTvChannel[];
-    error?: string;
-    needsReconnect?: boolean;
-  };
+  const text = await res.text().catch(() => '');
+  let j: { channels?: YoutubeTvChannel[]; error?: string; needsReconnect?: boolean } = {};
+  try {
+    j = text ? (JSON.parse(text) as typeof j) : {};
+  } catch {
+    throw new YoutubeTvApiError(
+      text.trim().slice(0, 240) || `Could not load channels (${res.status})`,
+      res.status,
+      false,
+    );
+  }
   if (!res.ok) {
     throw new YoutubeTvApiError(
-      j.error || `Could not load channels (${res.status})`,
+      j.error || text.trim().slice(0, 240) || `Could not load channels (${res.status})`,
       res.status,
       Boolean(j.needsReconnect),
     );

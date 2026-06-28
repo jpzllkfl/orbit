@@ -24,6 +24,9 @@ function normalizeCredentials(credentials) {
   if (!creds.expiry_date) {
     creds.expiry_date = new Date(Date.now() + 3600 * 1000).toISOString();
   }
+  if (creds.client && typeof creds.client === 'object' && !creds.client.client_id) {
+    delete creds.client;
+  }
   return creds;
 }
 
