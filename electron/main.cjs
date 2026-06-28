@@ -313,6 +313,28 @@ ipcMain.handle('orbit-yttv:connect', async () => {
   });
 });
 
+ipcMain.handle('orbit-yttv:browse', async (_evt, opts) => {
+  const url = String(opts?.url || '');
+  if (!/^https:\/\/(www\.youtube\.com|tv\.youtube\.com)\//i.test(url)) {
+    throw new Error('YouTube TV browse URL not allowed.');
+  }
+  const method = String(opts?.method || 'POST').toUpperCase();
+  const headers = opts?.headers && typeof opts.headers === 'object' ? opts.headers : {};
+  const body = typeof opts?.body === 'string' ? opts.body : '';
+  const response = await fetch(url, {
+    method,
+    headers,
+    body: method === 'GET' || method === 'HEAD' ? undefined : body,
+    signal: AbortSignal.timeout(45000),
+  });
+  const text = await response.text();
+  return {
+    status: response.status,
+    contentType: response.headers.get('content-type') || '',
+    body: text.slice(0, 4_000_000),
+  };
+});
+
 function lanAddresses() {
   const ips = new Set();
   for (const entries of Object.values(os.networkInterfaces())) {

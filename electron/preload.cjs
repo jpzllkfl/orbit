@@ -38,6 +38,9 @@ contextBridge.exposeInMainWorld('orbitNative', {
   connectYouTubeTv() {
     return ipcRenderer.invoke('orbit-yttv:connect');
   },
+  yttvBrowse(opts) {
+    return ipcRenderer.invoke('orbit-yttv:browse', opts);
+  },
   checkForUpdates() {
     return ipcRenderer.invoke('orbit-update:check');
   },

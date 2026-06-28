@@ -21,6 +21,7 @@ export function LiveTvView({ onOpenConnections }: { onOpenConnections?: () => vo
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [yttvConnected, setYttvConnected] = useState(false);
+  const [yttvChannelsOk, setYttvChannelsOk] = useState(false);
   const [yttvChannels, setYttvChannels] = useState<YoutubeTvChannel[]>([]);
   const [plexChannels, setPlexChannels] = useState<PlexLiveChannel[]>([]);
   const [group, setGroup] = useState<string>('All');
@@ -41,6 +42,7 @@ export function LiveTvView({ onOpenConnections }: { onOpenConnections?: () => vo
         }
         const st = await fetchYoutubeTvStatus();
         setYttvConnected(st.connected);
+        setYttvChannelsOk(false);
         if (!st.connected) {
           setError('Connect YouTube TV in Connections to load your live channels.');
           setYttvChannels([]);
@@ -48,6 +50,7 @@ export function LiveTvView({ onOpenConnections }: { onOpenConnections?: () => vo
         }
         const ch = await fetchYoutubeTvChannels();
         setYttvChannels(ch);
+        setYttvChannelsOk(ch.length > 0);
         setPlexChannels([]);
         return;
       }
@@ -62,21 +65,10 @@ export function LiveTvView({ onOpenConnections }: { onOpenConnections?: () => vo
     } catch (e) {
       if (e instanceof YoutubeTvApiError && e.needsReconnect) {
         setYttvConnected(false);
+        setYttvChannelsOk(false);
         setYttvChannels([]);
       }
-      if (e instanceof YoutubeTvApiError) {
-        if (e.networkFailure) {
-          setError('Network error — could not reach Orbit. Check your connection and try again.');
-        } else if (e.blockedByCloudflare) {
-          setError(
-            'YouTube TV blocked the server. Open Orbit on your desktop (same account) to load channels from your home network.',
-          );
-        } else {
-          setError(sanitizeApiErrorText(e.message, 'Could not load channels.'));
-        }
-      } else {
-        setError(sanitizeApiErrorText(e instanceof Error ? e.message : 'Could not load channels.'));
-      }
+      setError(sanitizeApiErrorText(e instanceof Error ? e.message : 'Could not load channels.'));
     } finally {
       setLoading(false);
     }
@@ -165,8 +157,13 @@ export function LiveTvView({ onOpenConnections }: { onOpenConnections?: () => vo
       </div>
 
       {source === 'youtubetv' && yttvConnected && (
-        <div className="livetv-now">
-          <span className="livetv-live-dot" /> YouTube TV connected
+        <div className={'livetv-now' + (yttvChannelsOk ? '' : ' livetv-now-warn')}>
+          <span className={'livetv-live-dot' + (yttvChannelsOk ? '' : ' off')} />{' '}
+          {yttvChannelsOk
+            ? 'YouTube TV connected — channels loaded'
+            : loading
+              ? 'YouTube TV connected — loading channels…'
+              : 'YouTube TV connected — channels not loaded'}
         </div>
       )}
 

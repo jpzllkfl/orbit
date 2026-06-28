@@ -379,6 +379,40 @@ export async function disconnect(userId) {
   }
 }
 
+/** Build unplugged browse HTTP requests for client/Electron relay (home/residential IP). */
+export async function buildClientBrowseRequests(userId) {
+  const yt = await createAuthenticatedClient(userId);
+  const accessToken = await ensureFreshAccessToken(yt, userId);
+  const body = browseRequestBody(yt);
+  return UNPLUGGED_BROWSE_ENDPOINTS.map((endpoint) => {
+    const url = new URL(endpoint.url);
+    url.searchParams.set('prettyPrint', 'false');
+    url.searchParams.set('alt', 'json');
+    return {
+      url: url.toString(),
+      method: 'POST',
+      headers: browseHeaders(endpoint, accessToken),
+      body,
+    };
+  });
+}
+
+/** Parse a browse HTTP payload (from client/Electron relay) into channel rows. */
+export function channelsFromBrowsePayload(payload) {
+  const status = Number(payload?.status) || 502;
+  const contentType = String(payload?.contentType || '');
+  const bodyText = String(payload?.body || '');
+  const url = String(payload?.url || '');
+  const data = parseBrowseResponse(bodyText, contentType, status, url);
+  const channels = parseChannelsFromBrowse(data);
+  if (!channels.length) {
+    throw new Error(
+      `No channels in YouTube TV guide (${browseResponseSummary(data)}). Confirm your subscription is active, then disconnect and reconnect.`,
+    );
+  }
+  return channels;
+}
+
 export async function listChannels(userId, opts = {}) {
   const stored = loadCredentials(userId);
   if (!stored?.credentials?.access_token) {

@@ -11,7 +11,7 @@ export function sanitizeApiErrorText(text: string, fallback = 'Request failed.')
   const raw = String(text || '').trim();
   if (!raw) return fallback;
   if (looksLikeHtml(raw)) {
-    return 'YouTube TV blocked the server request. Try again, reconnect in Connections, or use the Orbit desktop app.';
+    return 'YouTube TV blocked the cloud server. Open Orbit on your Plex PC, sign in, tap Sync now, then refresh Live TV.';
   }
   const oneLine = raw.replace(/\s+/g, ' ').trim();
   return oneLine.length > 220 ? oneLine.slice(0, 217) + '…' : oneLine;

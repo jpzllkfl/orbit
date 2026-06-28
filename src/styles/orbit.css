@@ -1967,7 +1967,9 @@ html.orbit-reduce-motion .coll-card { transition: none !important; transform: no
 .livetv-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
 .livetv-head > div:first-child { flex: 1; min-width: 220px; }
 .livetv-now { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 16px; font-size: 13px; font-weight: 600; color: var(--warm); }
+.livetv-now-warn { color: var(--muted); }
 .livetv-live-dot { width: 8px; height: 8px; border-radius: 50%; background: #e53935; box-shadow: 0 0 0 4px rgba(229,57,53,.2); }
+.livetv-live-dot.off { background: #888; box-shadow: 0 0 0 4px rgba(136,136,136,.15); }
 .livetv-status, .livetv-empty { padding: 24px 8px; color: var(--muted); }
 .livetv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 12px; }
 .livetv-ch { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 10px; border-radius: var(--r); border: 1px solid var(--line); background: rgba(255,255,255,.025); transition: .14s; text-align: center; }

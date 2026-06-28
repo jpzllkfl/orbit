@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { pipeline } from 'stream/promises';
 import { Readable } from 'stream';
 import { resolveSession } from '../auth-store.js';
-import { isPrivateLanOrigin, resolveRelayOrigin } from '../media/relay.js';
+import { resolveRelayOrigin } from '../media/relay.js';
 import {
   connectionStatus,
   clearCredentials,
@@ -16,6 +16,8 @@ import {
   relayInnertubeFetch,
   resolveStream,
   startConnect,
+  buildClientBrowseRequests,
+  channelsFromBrowsePayload,
 } from './client.js';
 import { sanitizeYoutubeTvErrorText } from './errors.js';
 
@@ -26,7 +28,23 @@ function respondYoutubeTvError(res, err, fallback) {
     error: sanitizeYoutubeTvErrorText(message, fallback),
     needsReconnect,
     blockedByCloudflare: Boolean(err?.blockedByCloudflare),
+    clientBrowseAvailable: Boolean(err?.clientBrowseAvailable || err?.blockedByCloudflare),
+    relayConfigured: Boolean(err?.relayConfigured),
+    relayFailed: Boolean(err?.relayFailed),
   });
+}
+
+function relayUnavailableMessage(origin) {
+  if (!origin) {
+    return 'YouTube TV blocked the cloud server. Open Orbit on your Plex PC, sign in, tap Sync now, then refresh Live TV.';
+  }
+  return `YouTube TV blocked the cloud server and could not reach your desktop Orbit at ${origin}. Keep Orbit open on your Plex PC, tap Sync in Connections, then refresh.`;
+}
+
+function relayFetchErrorMessage(origin, detail) {
+  const hint = relayUnavailableMessage(origin);
+  const extra = detail ? ` (${sanitizeYoutubeTvErrorText(detail, '')})` : '';
+  return `${hint}${extra}`.trim();
 }
 
 const CHANNELS_DEADLINE_MS = 25000;
@@ -46,7 +64,6 @@ function withDeadline(promise, ms, label) {
 function desktopRelayFetch(req) {
   const origin = resolveRelayOrigin(req);
   if (!origin) return null;
-  if (isPrivateLanOrigin(origin)) return null;
   return async (url, init = {}) => {
     let relayRes;
     try {
@@ -157,17 +174,31 @@ export function createYoutubeTvRouter() {
   });
 
   router.get('/channels', requireAuth, async (req, res) => {
+    const relayOrigin = resolveRelayOrigin(req);
     try {
       const channels = await withDeadline(
         (async () => {
           try {
             return await listChannels(req.orbitUser.id);
           } catch (e) {
+            if (!e?.blockedByCloudflare) throw e;
             const relayFetch = desktopRelayFetch(req);
-            if (e?.blockedByCloudflare && relayFetch) {
-              return await listChannels(req.orbitUser.id, { fetchImpl: relayFetch });
+            if (!relayFetch) {
+              e.clientBrowseAvailable = true;
+              e.relayConfigured = false;
+              e.message = relayUnavailableMessage(null);
+              throw e;
             }
-            throw e;
+            try {
+              return await listChannels(req.orbitUser.id, { fetchImpl: relayFetch });
+            } catch (relayErr) {
+              relayErr.blockedByCloudflare = true;
+              relayErr.clientBrowseAvailable = true;
+              relayErr.relayConfigured = true;
+              relayErr.relayFailed = true;
+              relayErr.message = relayFetchErrorMessage(relayOrigin, relayErr.message);
+              throw relayErr;
+            }
           }
         })(),
         CHANNELS_DEADLINE_MS,
@@ -175,11 +206,58 @@ export function createYoutubeTvRouter() {
       );
       res.json({ channels });
     } catch (e) {
-      if (e?.blockedByCloudflare && !desktopRelayFetch(req)) {
-        e.message =
-          'YouTube TV blocked the cloud server. Open Orbit on your desktop (same account) so channels can load via your home network.';
+      if (e?.blockedByCloudflare) {
+        e.relayConfigured = Boolean(relayOrigin);
       }
       respondYoutubeTvError(res, e, 'Could not load YouTube TV channels.');
+    }
+  });
+
+  /** Short-lived browse requests for client/Electron relay (residential IP). */
+  router.get('/browse-requests', requireAuth, async (req, res) => {
+    try {
+      const requests = await buildClientBrowseRequests(req.orbitUser.id);
+      res.json({ requests });
+    } catch (e) {
+      respondYoutubeTvError(res, e, 'Could not prepare YouTube TV channel load.');
+    }
+  });
+
+  /** Parse browse JSON returned by the user's browser or desktop app. */
+  router.post('/channels/from-browse', requireAuth, async (req, res) => {
+    try {
+      const channels = channelsFromBrowsePayload(req.body || {});
+      res.json({ channels });
+    } catch (e) {
+      respondYoutubeTvError(res, e, 'Could not parse YouTube TV channel guide.');
+    }
+  });
+
+  /** Check whether cloud can reach the synced desktop for YouTube relay. */
+  router.get('/relay-status', requireAuth, async (req, res) => {
+    const origin = resolveRelayOrigin(req);
+    if (!origin) {
+      res.json({
+        ok: false,
+        configured: false,
+        error: 'Desktop not linked. Open Orbit on your Plex PC, sign in, and tap Sync now.',
+      });
+      return;
+    }
+    try {
+      const r = await fetch(`${origin}/api/health`, { signal: AbortSignal.timeout(8000) });
+      res.json({
+        ok: r.ok,
+        configured: true,
+        origin,
+      });
+    } catch (e) {
+      res.status(502).json({
+        ok: false,
+        configured: true,
+        origin,
+        error: e.message || 'Could not reach desktop Orbit on your LAN.',
+      });
     }
   });
 

@@ -71,7 +71,14 @@ export function useOrbitBoot(opts: {
             try {
               await withTimeout(OrbitAccount.pullSync(), 25000, 'Account sync');
               resetAppStateCache(false);
-              if (isDesktopApp()) await withTimeout(publishDesktopMediaOrigin(), 8000, 'Desktop origin');
+              if (isDesktopApp()) {
+                await withTimeout(publishDesktopMediaOrigin(), 8000, 'Desktop origin');
+                try {
+                  await OrbitAccount.pushSyncNow();
+                } catch {
+                  /* offline */
+                }
+              }
             } catch {
               /* offline */
             }

@@ -1,4 +1,5 @@
 import { orbitApiFetch } from './orbitApi';
+import { isDesktopApp } from './isDesktop';
 import { sanitizeApiErrorText } from './sanitizeError';
 
 export type YoutubeTvStatus = {
@@ -10,21 +11,21 @@ export type YoutubeTvStatus = {
 export class YoutubeTvApiError extends Error {
   needsReconnect: boolean;
   status: number;
-  networkFailure: boolean;
   blockedByCloudflare: boolean;
+  clientBrowseAvailable: boolean;
 
   constructor(
     message: string,
     status: number,
     needsReconnect = false,
-    opts: { networkFailure?: boolean; blockedByCloudflare?: boolean } = {},
+    opts: { blockedByCloudflare?: boolean; clientBrowseAvailable?: boolean } = {},
   ) {
     super(message);
     this.name = 'YoutubeTvApiError';
     this.status = status;
     this.needsReconnect = needsReconnect;
-    this.networkFailure = Boolean(opts.networkFailure);
     this.blockedByCloudflare = Boolean(opts.blockedByCloudflare);
+    this.clientBrowseAvailable = Boolean(opts.clientBrowseAvailable);
   }
 }
 
@@ -43,6 +44,106 @@ export type YoutubeTvConnectStart = {
   already?: boolean;
 };
 
+type BrowseRequest = {
+  url: string;
+  method: string;
+  headers: Record<string, string>;
+  body: string;
+};
+
+type ChannelsErrorPayload = {
+  error?: string;
+  needsReconnect?: boolean;
+  blockedByCloudflare?: boolean;
+  clientBrowseAvailable?: boolean;
+};
+
+function shouldTryClientBrowse(payload: ChannelsErrorPayload, status: number): boolean {
+  if (payload.clientBrowseAvailable || payload.blockedByCloudflare) return true;
+  if (status !== 502) return false;
+  return /blocked the (cloud )?server|network protection|desktop Orbit|Sync now/i.test(payload.error || '');
+}
+
+async function fetchBrowseRequests(): Promise<BrowseRequest[]> {
+  const res = await orbitApiFetch('/api/youtube-tv/browse-requests');
+  const j = (await res.json().catch(() => ({}))) as { requests?: BrowseRequest[]; error?: string };
+  if (!res.ok || !Array.isArray(j.requests) || !j.requests.length) {
+    throw new YoutubeTvApiError(
+      sanitizeApiErrorText(j.error || '', 'Could not prepare YouTube TV channel load.'),
+      res.status,
+      Boolean((j as ChannelsErrorPayload).needsReconnect),
+    );
+  }
+  return j.requests;
+}
+
+async function executeBrowseRequest(req: BrowseRequest): Promise<{ status: number; contentType: string; body: string; url: string }> {
+  if (isDesktopApp() && window.orbitNative?.yttvBrowse) {
+    const out = await window.orbitNative.yttvBrowse({
+      url: req.url,
+      method: req.method,
+      headers: req.headers,
+      body: req.body,
+    });
+    return {
+      status: out.status,
+      contentType: out.contentType || '',
+      body: out.body || '',
+      url: req.url,
+    };
+  }
+  const res = await fetch(req.url, {
+    method: req.method,
+    headers: req.headers,
+    body: req.body,
+    credentials: 'omit',
+  });
+  return {
+    status: res.status,
+    contentType: res.headers.get('content-type') || '',
+    body: await res.text(),
+    url: req.url,
+  };
+}
+
+async function parseBrowseResult(payload: {
+  status: number;
+  contentType: string;
+  body: string;
+  url: string;
+}): Promise<YoutubeTvChannel[]> {
+  const res = await orbitApiFetch('/api/youtube-tv/channels/from-browse', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  const j = (await res.json().catch(() => ({}))) as { channels?: YoutubeTvChannel[]; error?: string; needsReconnect?: boolean };
+  if (!res.ok || !j.channels?.length) {
+    throw new YoutubeTvApiError(
+      sanitizeApiErrorText(j.error || '', 'Could not parse YouTube TV channel guide.'),
+      res.status,
+      Boolean(j.needsReconnect),
+    );
+  }
+  return j.channels;
+}
+
+async function loadChannelsViaClientRelay(): Promise<YoutubeTvChannel[]> {
+  const requests = await fetchBrowseRequests();
+  let lastErr: Error | null = null;
+  for (const req of requests) {
+    try {
+      const result = await executeBrowseRequest(req);
+      return await parseBrowseResult(result);
+    } catch (e) {
+      lastErr = e instanceof Error ? e : new Error(String(e));
+      if (e instanceof YoutubeTvApiError && e.needsReconnect) throw e;
+    }
+  }
+  const hint = isDesktopApp()
+    ? 'Could not load channels from this PC. Confirm YouTube TV is connected, then try Refresh.'
+    : 'Could not load channels from your browser. Open Orbit on your Plex PC, sign in, tap Sync now, keep it running, then refresh Live TV.';
+  throw new YoutubeTvApiError(lastErr?.message || hint, 502, false, { clientBrowseAvailable: true });
+}
 
 export async function fetchYoutubeTvStatus(): Promise<YoutubeTvStatus> {
   const res = await orbitApiFetch('/api/youtube-tv/status');
@@ -72,29 +173,9 @@ export async function disconnectYoutubeTv(): Promise<void> {
 }
 
 export async function fetchYoutubeTvChannels(): Promise<YoutubeTvChannel[]> {
-  let res: Response;
-  try {
-    res = await orbitApiFetch('/api/youtube-tv/channels');
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : '';
-    const network =
-      e instanceof TypeError || /failed to fetch|networkerror|load failed/i.test(msg);
-    throw new YoutubeTvApiError(
-      network
-        ? 'Could not reach the Orbit server. Check your connection and try again.'
-        : sanitizeApiErrorText(msg, 'Could not load channels.'),
-      0,
-      false,
-      { networkFailure: network },
-    );
-  }
+  const res = await orbitApiFetch('/api/youtube-tv/channels');
   const text = await res.text().catch(() => '');
-  let j: {
-    channels?: YoutubeTvChannel[];
-    error?: string;
-    needsReconnect?: boolean;
-    blockedByCloudflare?: boolean;
-  } = {};
+  let j: { channels?: YoutubeTvChannel[] } & ChannelsErrorPayload = {};
   try {
     j = text ? (JSON.parse(text) as typeof j) : {};
   } catch {
@@ -104,12 +185,28 @@ export async function fetchYoutubeTvChannels(): Promise<YoutubeTvChannel[]> {
       false,
     );
   }
+  if (res.ok && j.channels?.length) {
+    return j.channels;
+  }
+  if (!res.ok && shouldTryClientBrowse(j, res.status)) {
+    try {
+      return await loadChannelsViaClientRelay();
+    } catch (clientErr) {
+      if (clientErr instanceof YoutubeTvApiError) throw clientErr;
+      throw new YoutubeTvApiError(
+        sanitizeApiErrorText(clientErr instanceof Error ? clientErr.message : '', j.error || text),
+        res.status,
+        Boolean(j.needsReconnect),
+        { blockedByCloudflare: Boolean(j.blockedByCloudflare), clientBrowseAvailable: true },
+      );
+    }
+  }
   if (!res.ok) {
     throw new YoutubeTvApiError(
       sanitizeApiErrorText(j.error || text, `Could not load channels (${res.status})`),
       res.status,
       Boolean(j.needsReconnect),
-      { blockedByCloudflare: Boolean(j.blockedByCloudflare) },
+      { blockedByCloudflare: Boolean(j.blockedByCloudflare), clientBrowseAvailable: Boolean(j.clientBrowseAvailable) },
     );
   }
   return j.channels || [];

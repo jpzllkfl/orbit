@@ -33,6 +33,13 @@ export type OrbitNativeAPI = {
   onResyncBounds?(cb: () => void): void;
   openExternal(url: string): Promise<void>;
   pickFolder?(): Promise<string | null>;
+  connectYouTubeTv?(): Promise<string | null>;
+  yttvBrowse?(opts: {
+    url: string;
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+  }): Promise<{ status: number; contentType: string; body: string }>;
   checkForUpdates?(): Promise<UpdateStatus>;
   installUpdate?(): Promise<boolean>;
   getUpdateStatus?(): Promise<UpdateStatus>;
