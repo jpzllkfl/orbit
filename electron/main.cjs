@@ -48,6 +48,10 @@ function showBootError(title, detail) {
 async function startServer() {
   // Packaged app lives in app.asar — auth/sqlite must write to userData, not inside the bundle.
   process.env.ORBIT_DATA_DIR = path.join(app.getPath('userData'), 'data');
+  process.env.ORBIT_NATIVE = '1';
+  if (!process.env.ORBIT_CLOUD_HOME) {
+    process.env.ORBIT_CLOUD_HOME = 'https://orbit.broken-eye.com';
+  }
   if (!process.env.ORBIT_TMDB_API_KEY) {
     process.env.ORBIT_TMDB_API_KEY = 'b379792391747f1606e1d7a933dd2aea';
   }

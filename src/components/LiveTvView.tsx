@@ -10,6 +10,7 @@ import {
   type YoutubeTvChannel,
 } from '../lib/youtubeTv';
 import { sanitizeApiErrorText } from '../lib/sanitizeError';
+import { isDesktopApp } from '../lib/isDesktop';
 import { LiveTvPlayer } from './LiveTvPlayer';
 import { Icons } from './icons';
 
@@ -68,7 +69,19 @@ export function LiveTvView({ onOpenConnections }: { onOpenConnections?: () => vo
         setYttvChannelsOk(false);
         setYttvChannels([]);
       }
-      setError(sanitizeApiErrorText(e instanceof Error ? e.message : 'Could not load channels.'));
+      if (e instanceof YoutubeTvApiError) {
+        if (e.networkFailure) {
+          setError('Could not reach Orbit. Check your internet connection, then tap Refresh.');
+        } else if (e.blockedByCloudflare && !isDesktopApp()) {
+          setError(
+            'YouTube TV blocked the cloud server. Open Orbit on your Plex PC (same account), then refresh Live TV.',
+          );
+        } else {
+          setError(sanitizeApiErrorText(e.message, 'Could not load channels.'));
+        }
+      } else {
+        setError(sanitizeApiErrorText(e instanceof Error ? e.message : 'Could not load channels.'));
+      }
     } finally {
       setLoading(false);
     }

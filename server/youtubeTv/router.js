@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { pipeline } from 'stream/promises';
 import { Readable } from 'stream';
-import { resolveSession } from '../auth-store.js';
+import { requireAuthWithCloudBridge } from '../auth-cloud-bridge.js';
 import { resolveRelayOrigin } from '../media/relay.js';
 import {
   connectionStatus,
@@ -103,18 +103,8 @@ function desktopRelayFetch(req) {
   };
 }
 
-function bearerToken(req) {
-  const h = req.headers.authorization || '';
-  if (h.startsWith('Bearer ')) return h.slice(7).trim();
-  return null;
-}
-
 function requireAuth(req, res, next) {
-  const user = resolveSession(bearerToken(req));
-  if (!user) return res.status(401).json({ error: 'Sign in to Orbit first.' });
-  req.orbitUser = user;
-  res.locals.orbitUserId = user.id;
-  next();
+  requireAuthWithCloudBridge(req, res, next);
 }
 
 function rewriteHls(body, baseUrl, proxyBase) {

@@ -1,4 +1,5 @@
-import { authApiUrl, getOmsManagementServer } from './orbitServer';
+import { authApiUrl, getAuthServer, getOmsManagementServer } from './orbitServer';
+import { isDesktopApp } from './isDesktop';
 
 function authToken(): string | null {
   try {
@@ -8,8 +9,7 @@ function authToken(): string | null {
   }
 }
 
-/** Fetch Orbit auth API on the account home server. */
-export async function orbitApiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+function apiFetchHeaders(init: RequestInit): Record<string, string> {
   const headers: Record<string, string> = {
     ...(init.headers as Record<string, string>),
   };
@@ -18,7 +18,27 @@ export async function orbitApiFetch(path: string, init: RequestInit = {}): Promi
   if (init.body && !headers['Content-Type'] && !headers['content-type']) {
     headers['Content-Type'] = 'application/json';
   }
-  return fetch(authApiUrl(path), { ...init, headers });
+  return headers;
+}
+
+/** Local embedded server on desktop — residential IP for YouTube TV Innertube calls. */
+export function getYoutubeTvApiBase(): string {
+  if (isDesktopApp() && typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  return getAuthServer();
+}
+
+/** Fetch Orbit auth API on the account home server. */
+export async function orbitApiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(authApiUrl(path), { ...init, headers: apiFetchHeaders(init) });
+}
+
+/** YouTube TV API — local server on desktop (home IP), cloud elsewhere. */
+export async function youtubeTvApiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const base = getYoutubeTvApiBase();
+  const p = path.startsWith('/') ? path : '/' + path;
+  return fetch(base + p, { ...init, headers: apiFetchHeaders(init) });
 }
 
 /** Fetch Orbit Media Server API (local on desktop, same-site on web). */
