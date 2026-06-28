@@ -1156,6 +1156,7 @@ html.orbit-reduce-motion .coll-card { transition: none !important; transform: no
 .vp-video::cue { background: rgba(0, 0, 0, 0.6); color: #fff; font-family: 'Satoshi', sans-serif; font-size: 1.05em; line-height: 1.4; }
 
 .vp-spinner { position: absolute; top: 50%; left: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.18); border-top-color: var(--warm); animation: vpspin .8s linear infinite; }
+.vp-wait-msg { position: absolute; top: calc(50% + 48px); left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 0.9rem; color: rgba(255,255,255,0.75); margin: 0; pointer-events: none; }
 @keyframes vpspin { to { transform: rotate(360deg); } }
 
 .vp-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 92px; height: 92px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: rgba(9, 104, 162, 0.32); border: 1.5px solid rgba(255, 255, 255, 0.35); backdrop-filter: blur(8px); transition: .16s; z-index: 4; }

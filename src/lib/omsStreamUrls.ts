@@ -1,5 +1,5 @@
 import { isDesktopApp } from './isDesktop';
-import { authApiUrl, DESKTOP_MEDIA_LS, getOmsPlaybackOrigin, mediaApiUrl, normalizeOrigin } from './orbitServer';
+import { authApiUrl, DESKTOP_MEDIA_LS, getAuthServer, getOmsPlaybackOrigin, mediaApiUrl, normalizeOrigin } from './orbitServer';
 
 function isPrivateHost(url: string): boolean {
   try {
@@ -33,12 +33,16 @@ function streamAuthSuffix(): string {
 export function shouldUseMediaRelay(): boolean {
   if (isDesktopApp()) return false;
   if (typeof window === 'undefined') return false;
+  if (!sessionToken()) return false;
   const page = window.location.origin;
+  const auth = getAuthServer();
+  const playback = getOmsPlaybackOrigin();
+  // Signed-in cloud web: libraries are on the Plex PC — always relay (server reads desktop URL from account sync).
+  if (page.startsWith('https://') && playback === page && auth === page) return true;
   try {
     const remote = localStorage.getItem(DESKTOP_MEDIA_LS);
     if (!remote) return false;
     const norm = normalizeOrigin(remote);
-    if (!sessionToken()) return false;
     if (getOmsPlaybackOrigin() === page) return false;
     if (page.startsWith('https://') && norm.startsWith('http://')) return true;
     if (isPrivateHost(norm) && !isPrivateHost(page)) return true;

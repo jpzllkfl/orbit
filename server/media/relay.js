@@ -6,7 +6,8 @@ function bearerOrQueryToken(req) {
   const h = req.headers.authorization || '';
   if (h.startsWith('Bearer ')) return h.slice(7).trim();
   const q = req.query?.orbit_token;
-  return typeof q === 'string' && q.trim() ? q.trim() : null;
+  if (typeof q === 'string' && q.trim()) return q.trim();
+  return null;
 }
 
 function normalizeOrigin(url) {
@@ -118,5 +119,35 @@ export async function relayTranscodeFile(req, res) {
     if (!res.headersSent) {
       res.status(502).json({ error: e.message || 'Transcode relay failed.' });
     }
+  }
+}
+
+/** Check whether cloud can reach the synced desktop OMS (for web playback diagnostics). */
+export async function relayStatus(req, res) {
+  const origin = resolveRelayOrigin(req);
+  if (!origin) {
+    res.json({
+      ok: false,
+      configured: false,
+      error: 'Desktop not linked. Open Orbit on your Plex PC, sign in, and tap Sync now.',
+    });
+    return;
+  }
+  try {
+    const r = await fetch(`${origin}/api/media/status`, { signal: AbortSignal.timeout(8000) });
+    const desktop = await r.json().catch(() => ({}));
+    res.json({
+      ok: r.ok,
+      configured: true,
+      origin,
+      desktop,
+    });
+  } catch (e) {
+    res.status(502).json({
+      ok: false,
+      configured: true,
+      origin,
+      error: e.message || 'Could not reach desktop Orbit Media Server on your LAN.',
+    });
   }
 }

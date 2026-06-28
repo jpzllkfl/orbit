@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type SVGProps } from 'react';
 import { Plex, Progress } from '../lib';
 import { attachHlsSource, videoHasDecodedAudio, type HlsHandle } from '../lib/hlsPlayer';
 import { canReachOmsPlayback, omsPlaybackId } from '../lib/omsPlayback';
+import { pickOmsPlaybackUrl, probeOmsStreamUrl } from '../lib/omsStreamProbe';
 import { shouldUseMediaRelay } from '../lib/omsStreamUrls';
 import { bindBoundsSync, hasNativePlayer, nativePlayerInfo, videoBounds } from '../lib/nativePlayer';
 import { loadSettings } from '../lib/settings';
@@ -123,7 +124,7 @@ function shouldResume() {
 
 function browserCanDirectPlayUrl(url: string, node: OrbitNode): boolean {
   if (url.includes('.m3u8')) return true;
-  const pathHint = (node.omsPath || url || '').toLowerCase();
+  const pathHint = (node.omsPath || node.container || url || '').toLowerCase();
   if (/\.(mkv|avi|wmv|flv|ts|m2ts)(\?|$)/i.test(pathHint)) return false;
   if (node.container && !/mp4|webm|mov|m4v/i.test(node.container)) return false;
   return true;
@@ -408,11 +409,31 @@ export function VideoPlayer({
         playNodeRef.current = node;
         setPlayNode(node);
         streamFallback.current = info.fallbackUrl || null;
-        const useDirect =
-          nativeMode || inElectron || browserCanDirectPlayUrl(info.url, node);
-        const url = useDirect ? info.url : info.fallbackUrl || info.url;
-        streamModeRef.current = url.includes('.m3u8') ? 'transcode' : 'direct';
-        setStreamUrl(url);
+        const webRelay = shouldUseMediaRelay();
+        const picked = pickOmsPlaybackUrl(
+          { url: info.url, fallbackUrl: info.fallbackUrl },
+          {
+            webRelay,
+            allowDirect: (nativeMode || inElectron) && browserCanDirectPlayUrl(info.url, node),
+          },
+        );
+        const probeErr = await probeOmsStreamUrl(
+          picked.url,
+          picked.mode === 'transcode' ? 65000 : 20000,
+        );
+        if (!alive) return;
+        if (probeErr) {
+          setError(probeErr);
+          setWaiting(false);
+          return;
+        }
+        streamModeRef.current = picked.mode;
+        if (picked.mode === 'direct') {
+          streamFallback.current = info.fallbackUrl || null;
+        } else {
+          streamFallback.current = null;
+        }
+        setStreamUrl(picked.url);
         return;
       }
       if (Plex.connected && (node.plexKey || node.partKey)) {
@@ -457,7 +478,7 @@ export function VideoPlayer({
 
   onStreamFailRef.current = () => {
     const now = Date.now();
-    if (now - streamFailCooldown.current < 12000) return;
+    if (triedFallback.current && now - streamFailCooldown.current < 8000) return;
     streamFailCooldown.current = now;
     void (async () => {
       const fb = streamFallback.current;
@@ -552,6 +573,11 @@ export function VideoPlayer({
 
     attachSource(v, streamUrl, hlsRef, {
       onFatalError: () => onStreamFailRef.current(),
+      onManifestParsed: () => {
+        window.clearTimeout(stallTimer);
+        setWaiting(false);
+        startPlayback();
+      },
     });
 
     const stallMs = streamUrl.includes('.m3u8')
@@ -902,7 +928,13 @@ export function VideoPlayer({
         {subsSrc && <track kind="subtitles" srcLang="en" label="English" src={subsSrc} />}
       </video>
 
-      {waiting && !error && <div className="vp-spinner" aria-label="Buffering"></div>}
+      {waiting && !error && (
+        <div className="vp-spinner" aria-label="Buffering">
+          {shouldUseMediaRelay() && omsPlaybackRef.current && streamUrl?.includes('.m3u8') && (
+            <p className="vp-wait-msg">Preparing stream on your Plex PC…</p>
+          )}
+        </div>
+      )}
       {error && (
         <div className="vp-error">
           <div className="vp-error-card">

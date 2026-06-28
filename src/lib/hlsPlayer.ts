@@ -51,7 +51,18 @@ export function attachHlsSource(
       fetchSetup: (context, initParams) => {
         const url = context.url;
         const proxied = isOrbitMediaUrl(url) ? url : Plex.proxyStreamUrl(url);
-        return new Request(proxied, initParams);
+        const headers = new Headers(initParams.headers);
+        if (isOrbitMediaUrl(url)) {
+          try {
+            const token = localStorage.getItem('orbit.session.v1');
+            if (token && !headers.has('Authorization')) {
+              headers.set('Authorization', 'Bearer ' + token);
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+        return new Request(proxied, { ...initParams, headers });
       },
     });
 
