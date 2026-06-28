@@ -96,6 +96,7 @@ export interface OrbitHelpers {
 }
 
 export interface OrbitPlexClient {
+  clientId: string;
   useProxy: boolean;
   connected: boolean;
   conn: { url: string; token: string } | null;

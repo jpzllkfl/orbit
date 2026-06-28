@@ -63,6 +63,7 @@ const HomeView = lazy(() => import('./components/HomeView').then((m) => ({ defau
 const AtlasView = lazy(() => import('./components/AtlasView').then((m) => ({ default: m.AtlasView })));
 const OrbitMapView = lazy(() => import('./components/OrbitMapView').then((m) => ({ default: m.OrbitMapView })));
 const SmartView = lazy(() => import('./components/SmartView').then((m) => ({ default: m.SmartView })));
+const LiveTvView = lazy(() => import('./components/LiveTvView').then((m) => ({ default: m.LiveTvView })));
 import { ArtCtx, meta } from './components/Posters';
 import { Icons, LIB_ICON } from './components/icons';
 import './styles/orbit.css';
@@ -86,7 +87,7 @@ export default function App() {
   const [bootMsg, setBootMsg] = useState('Loading Orbit…');
   const [libraryReady, setLibraryReady] = useState(false);
   const liveTreeRef = useRef(false);
-  const [view, setView] = useState<'grid' | 'connections' | 'settings' | 'atlas' | 'map' | 'smart'>(() => {
+  const [view, setView] = useState<'grid' | 'connections' | 'settings' | 'atlas' | 'map' | 'smart' | 'livetv'>(() => {
     const h = (location.hash || '').replace('#', '');
     return ['atlas', 'map', 'smart'].includes(h) ? (h as 'atlas' | 'map' | 'smart') : 'grid';
   });
@@ -1357,6 +1358,10 @@ export default function App() {
               {I.wand({})}
               <span>Smart</span>
             </button>
+            <button type="button" className={'nav-item' + (view === 'livetv' ? ' active' : '')} onClick={() => pickView('livetv')}>
+              {I.tv({})}
+              <span>Live TV</span>
+            </button>
           </div>
 
           <div className={'nav-group' + (libNavEdit ? ' lib-nav-edit' : '')}>
@@ -1511,6 +1516,11 @@ export default function App() {
                 }}
                 openTitle={openTitle}
               />
+            </Suspense>
+          )}
+          {view === 'livetv' && (
+            <Suspense fallback={<ViewFallback />}>
+              <LiveTvView onOpenConnections={openConnections} />
             </Suspense>
           )}
           {view === 'connections' ? (

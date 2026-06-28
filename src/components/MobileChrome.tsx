@@ -4,7 +4,7 @@ import { Icons, LIB_ICON } from './icons';
 
 const I = Icons;
 
-type ViewId = 'grid' | 'connections' | 'settings' | 'atlas' | 'map' | 'smart';
+type ViewId = 'grid' | 'connections' | 'settings' | 'atlas' | 'map' | 'smart' | 'livetv';
 
 export function MobileChrome({
   drawerOpen,
@@ -68,7 +68,9 @@ export function MobileChrome({
               ? 'Settings'
               : view === 'connections'
                 ? 'Connections'
-                : crumbs[crumbs.length - 1]?.title || 'Orbit'}
+                : view === 'livetv'
+                  ? 'Live TV'
+                  : crumbs[crumbs.length - 1]?.title || 'Orbit'}
         </div>
         <button
           type="button"
@@ -146,6 +148,10 @@ export function MobileChrome({
         <button type="button" className={view === 'atlas' ? 'on' : ''} onClick={() => pickView('atlas')}>
           {I.tree({})}
           <span>Atlas</span>
+        </button>
+        <button type="button" className={view === 'livetv' ? 'on' : ''} onClick={() => pickView('livetv')}>
+          {I.tv({})}
+          <span>Live TV</span>
         </button>
         <button type="button" className={view === 'settings' ? 'on' : ''} onClick={openSettings}>
           {I.gear({})}

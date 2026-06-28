@@ -8,6 +8,7 @@ import { createMediaRouter } from './media/router.js';
 import { mediaStats } from './media/db.js';
 import { createArtRouter } from './art-router.js';
 import { createPlexRouter } from './plex-proxy.js';
+import { createLiveTvRouter } from './liveTv/router.js';
 import { createTmdbRouter } from './tmdb-router.js';
 import { isTmdbConfigured } from './tmdb-config.js';
 
@@ -66,6 +67,7 @@ export function createApp() {
   });
 
   app.use('/api/plex', createPlexRouter());
+  app.use('/api/livetv', createLiveTvRouter());
   app.use('/api/media', createMediaRouter());
   app.use('/api/tmdb', createTmdbRouter());
   app.use('/api/art', createArtRouter());

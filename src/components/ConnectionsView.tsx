@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Conn, Lib, OT, OrbitAccount, Plex } from '../lib';
 import { isDesktopApp } from '../lib/isDesktop';
+import {
+  ersatzM3uUrl,
+  loadLiveTvConfig,
+  saveLiveTvConfig,
+  type LiveTvSource,
+} from '../lib/liveTvConfig';
 import { loadSettings, patchSettings } from '../lib/settings';
 import { plexMetadataOnly } from '../lib/plexMetadataMode';
 import { getHomeServer, isUsingRemoteHome, setHomeServer } from '../lib/orbitServer';
@@ -17,6 +23,7 @@ const ic = {
       <path d="M5 2h6.5L17 12l-5.5 10H5l5.5-10z" />
     </svg>
   ),
+  tv: Icons.tv,
   refresh: Icons.spark,
 };
 
@@ -51,6 +58,10 @@ export function ConnectionsView({
   const [appVersion, setAppVersion] = useState('');
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
+  const [liveTvCfg, setLiveTvCfg] = useState(loadLiveTvConfig);
+  const [liveSource, setLiveSource] = useState<LiveTvSource>(() => liveTvCfg.source);
+  const [ersatzOrigin, setErsatzOrigin] = useState(() => liveTvCfg.ersatzOrigin);
+  const [iptvUrl, setIptvUrl] = useState(() => liveTvCfg.iptvUrl);
   const syncedLabel = conn?.syncedAt
     ? new Date(conn.syncedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
     : 'not yet';
@@ -385,6 +396,86 @@ export function ConnectionsView({
           ) : (
             <div className="conns-empty">No Plex server linked. Orbit Media Server works without Plex.</div>
           )}
+        </div>
+
+        <div className="conns-card wide">
+          <div className="conns-card-h">
+            <span className="conns-pill">{ic.tv({})}Live TV</span>
+            <span className={'conns-state' + (Plex.connected || ersatzOrigin.trim() || iptvUrl.trim() ? ' on' : '')}>
+              {liveSource === 'plex' && Plex.connected ? 'Plex' : liveSource === 'iptv' ? 'IPTV' : 'Not configured'}
+            </span>
+          </div>
+          <p className="conns-sub">
+            For YouTube TV: set up channels in Plex Live TV (via ErsatzTV, xTeVe, or HDHomeRun tuner) or point Orbit
+            at your ErsatzTV M3U playlist.
+          </p>
+          <div className="livetv-conns-source" style={{ marginTop: 12 }}>
+            <span className="conns-sub" style={{ display: 'block', marginBottom: 8 }}>
+              Source
+            </span>
+            <div className="livetv-source-toggle">
+              <button
+                type="button"
+                className={liveSource === 'plex' ? 'on' : ''}
+                disabled={!Plex.connected}
+                onClick={() => {
+                  setLiveSource('plex');
+                  setLiveTvCfg(saveLiveTvConfig({ source: 'plex' }));
+                }}
+              >
+                Plex Live TV
+              </button>
+              <button
+                type="button"
+                className={liveSource === 'iptv' ? 'on' : ''}
+                onClick={() => {
+                  setLiveSource('iptv');
+                  setLiveTvCfg(saveLiveTvConfig({ source: 'iptv' }));
+                }}
+              >
+                IPTV / ErsatzTV
+              </button>
+            </div>
+          </div>
+          <label className="oms-path" style={{ marginTop: 14, display: 'block' }}>
+            ErsatzTV server
+            <input
+              value={ersatzOrigin}
+              onChange={(e) => setErsatzOrigin(e.target.value)}
+              placeholder="http://192.168.1.177:8409"
+              spellCheck={false}
+            />
+          </label>
+          {ersatzOrigin.trim() && (
+            <p className="conns-sub" style={{ marginTop: 6 }}>
+              Playlist: {ersatzM3uUrl(ersatzOrigin)}
+            </p>
+          )}
+          <label className="oms-path" style={{ marginTop: 12, display: 'block' }}>
+            Custom M3U URL (optional)
+            <input
+              value={iptvUrl}
+              onChange={(e) => setIptvUrl(e.target.value)}
+              placeholder="http://host:8409/iptv/channels.m3u?mode=segmenter"
+              spellCheck={false}
+            />
+          </label>
+          <div className="conns-actions" style={{ marginTop: 10 }}>
+            <button
+              className="conns-btn primary sm"
+              onClick={() => {
+                const next = saveLiveTvConfig({
+                  source: liveSource,
+                  ersatzOrigin: ersatzOrigin.trim(),
+                  iptvUrl: iptvUrl.trim(),
+                });
+                setLiveTvCfg(next);
+                onBump?.();
+              }}
+            >
+              Save Live TV
+            </button>
+          </div>
         </div>
 
         <div className="conns-card">

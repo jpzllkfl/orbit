@@ -18,6 +18,7 @@ const SYNC_KEY_PREFIXES = [
   'orbit.oms.',
   'orbit.server.home.',
   'orbit.desktop.media.',
+  'orbit.livetv.',
 ];
 
 const SKIP_KEYS = new Set(['orbit.session.v1', 'orbit.art.cache.v1']);
