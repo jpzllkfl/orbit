@@ -1539,7 +1539,7 @@ export default function App() {
             <Suspense fallback={<ViewFallback />}>
               <SettingsView libraries={LIBS} onOpenConnections={openConnections} />
             </Suspense>
-          ) : (
+          ) : view === 'grid' ? (
           <div className="main-inner">
             {!atRoot && isColl(current) && current.type !== 'library' && !results && <CollectionHeroArt key={current.id} node={current} />}
 
@@ -1965,7 +1965,7 @@ export default function App() {
               </>
             )}
           </div>
-          )}
+          ) : null}
         </main>
 
         {ctxMenu && (

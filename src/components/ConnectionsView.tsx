@@ -471,7 +471,7 @@ export function ConnectionsView({
                           setYttvMsg('YouTube TV connected. Open Live TV in the sidebar.');
                           saveLiveTvConfig({ source: 'youtubetv' });
                           setLiveSource('youtubetv');
-                          if (OrbitAccount.signedIn) await OrbitAccount.pushSyncNow();
+                          await OrbitAccount.pullSync();
                           onBump?.();
                           return;
                         }
