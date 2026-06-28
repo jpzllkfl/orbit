@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { pipeline } from 'stream/promises';
 import { Readable } from 'stream';
 import { resolveSession } from '../auth-store.js';
+import { resolveRelayOrigin } from '../media/relay.js';
 import {
   connectionStatus,
   clearCredentials,
@@ -12,17 +13,51 @@ import {
   disconnect,
   listChannels,
   pollConnect,
+  relayInnertubeFetch,
   resolveStream,
   startConnect,
 } from './client.js';
+import { sanitizeYoutubeTvErrorText } from './errors.js';
 
 function respondYoutubeTvError(res, err, fallback) {
   const { message, needsReconnect } = classifyYoutubeTvError(err);
   if (needsReconnect) clearCredentials(res.locals.orbitUserId);
   res.status(needsReconnect ? 401 : 502).json({
-    error: message || fallback,
+    error: sanitizeYoutubeTvErrorText(message, fallback),
     needsReconnect,
+    blockedByCloudflare: Boolean(err?.blockedByCloudflare),
   });
+}
+
+function desktopRelayFetch(req) {
+  const origin = resolveRelayOrigin(req);
+  if (!origin) return null;
+  return async (url, init = {}) => {
+    const relayRes = await fetch(`${origin}/api/youtube-tv/innertube-relay`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: url.toString(),
+        method: init.method || 'POST',
+        headers: init.headers || {},
+        body: typeof init.body === 'string' ? init.body : '',
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+    const payload = await relayRes.json().catch(() => ({}));
+    if (!relayRes.ok) {
+      throw new Error(payload.error || 'Desktop relay failed.');
+    }
+    const status = Number(payload.status) || 502;
+    const contentType = payload.contentType || '';
+    const bodyText = String(payload.body || '');
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      headers: { get: (name) => (name.toLowerCase() === 'content-type' ? contentType : null) },
+      text: async () => bodyText,
+    };
+  };
 }
 
 function bearerToken(req) {
@@ -97,10 +132,34 @@ export function createYoutubeTvRouter() {
 
   router.get('/channels', requireAuth, async (req, res) => {
     try {
-      const channels = await listChannels(req.orbitUser.id);
+      let channels;
+      try {
+        channels = await listChannels(req.orbitUser.id);
+      } catch (e) {
+        const relayFetch = desktopRelayFetch(req);
+        if (e?.blockedByCloudflare && relayFetch) {
+          channels = await listChannels(req.orbitUser.id, { fetchImpl: relayFetch });
+        } else {
+          throw e;
+        }
+      }
       res.json({ channels });
     } catch (e) {
+      if (e?.blockedByCloudflare && !desktopRelayFetch(req)) {
+        e.message =
+          'YouTube TV blocked the cloud server. Open Orbit on your desktop (same account) so channels can load via your home network.';
+      }
       respondYoutubeTvError(res, e, 'Could not load YouTube TV channels.');
+    }
+  });
+
+  /** LAN relay: cloud server asks desktop to run the YouTube fetch from a home IP. */
+  router.post('/innertube-relay', async (req, res) => {
+    try {
+      const out = await relayInnertubeFetch(req.body || {});
+      res.json(out);
+    } catch (e) {
+      res.status(502).json({ error: sanitizeYoutubeTvErrorText(e.message, 'Relay failed.') });
     }
   });
 

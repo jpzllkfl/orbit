@@ -9,6 +9,7 @@ import {
   YoutubeTvApiError,
   type YoutubeTvChannel,
 } from '../lib/youtubeTv';
+import { sanitizeApiErrorText } from '../lib/sanitizeError';
 import { LiveTvPlayer } from './LiveTvPlayer';
 import { Icons } from './icons';
 
@@ -63,7 +64,7 @@ export function LiveTvView({ onOpenConnections }: { onOpenConnections?: () => vo
         setYttvConnected(false);
         setYttvChannels([]);
       }
-      setError(e instanceof Error ? e.message : 'Could not load channels.');
+      setError(sanitizeApiErrorText(e instanceof Error ? e.message : 'Could not load channels.'));
     } finally {
       setLoading(false);
     }
@@ -107,7 +108,7 @@ export function LiveTvView({ onOpenConnections }: { onOpenConnections?: () => vo
       const { url, title } = await resolveYoutubeTvStream(ch.videoId);
       setPlaying({ title, streamUrl: url });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Playback failed.');
+      setError(sanitizeApiErrorText(e instanceof Error ? e.message : 'Playback failed.'));
     } finally {
       setTuning(null);
     }

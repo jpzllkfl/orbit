@@ -1,10 +1,29 @@
 import { Innertube } from 'youtubei.js';
+import {
+  cloudflareBlockError,
+  looksLikeHtml,
+  sanitizeYoutubeTvErrorText,
+} from './errors.js';
 import { loadCredentials, saveCredentials } from './store.js';
 
 /** youtubei.js ClientType.TV value — not the shorthand key "TV". */
 const YTTV_CLIENT = 'TVHTML5';
+const YTTV_CLIENT_VERSION = '7.20250219.14.00';
+const YTTV_CLIENT_NAME_ID = '7';
 const YTTV_USER_AGENT = 'Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version';
-const UNPLUGGED_BROWSE_URL = 'https://tv.youtube.com/youtubei/v1/unplugged/browse';
+
+const UNPLUGGED_BROWSE_ENDPOINTS = [
+  {
+    url: 'https://www.youtube.com/youtubei/v1/unplugged/browse',
+    origin: 'https://www.youtube.com',
+    referer: 'https://tv.youtube.com/',
+  },
+  {
+    url: 'https://tv.youtube.com/youtubei/v1/unplugged/browse',
+    origin: 'https://tv.youtube.com',
+    referer: 'https://tv.youtube.com/',
+  },
+];
 
 const pendingSessions = new Map();
 
@@ -20,11 +39,11 @@ function walk(obj, fn) {
 
 function errorMessageFrom(err) {
   if (!err) return 'YouTube TV request failed.';
-  const base = err instanceof Error ? err.message : String(err);
+  const base = sanitizeYoutubeTvErrorText(err instanceof Error ? err.message : String(err));
   const detail = err?.info;
-  if (typeof detail === 'string' && detail.trim()) {
-    const snippet = detail.trim().slice(0, 220);
-    if (!base.includes(snippet.slice(0, 40))) return `${base} ${snippet}`;
+  if (typeof detail === 'string' && detail.trim() && !looksLikeHtml(detail)) {
+    const snippet = sanitizeYoutubeTvErrorText(detail);
+    if (snippet && !base.includes(snippet.slice(0, 40))) return `${base} ${snippet}`;
   }
   return base;
 }
@@ -147,48 +166,98 @@ async function ensureFreshAccessToken(yt, userId) {
   return oauth.oauth2_tokens.access_token;
 }
 
-async function fetchUnpluggedBrowse(yt, userId) {
-  await ensureFreshAccessToken(yt, userId);
+function browseRequestBody(yt) {
   ensureTvSessionContext(yt);
+  const context = JSON.parse(JSON.stringify(yt.session.context));
+  context.client.clientName = YTTV_CLIENT;
+  context.client.clientVersion = YTTV_CLIENT_VERSION;
+  context.client.userAgent = YTTV_USER_AGENT;
+  return JSON.stringify({ context });
+}
 
-  const url = new URL(UNPLUGGED_BROWSE_URL);
-  let response;
+function browseHeaders(endpoint, accessToken) {
+  return {
+    Accept: '*/*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    Authorization: `Bearer ${accessToken}`,
+    'Content-Type': 'application/json',
+    Origin: endpoint.origin,
+    Referer: endpoint.referer,
+    'User-Agent': YTTV_USER_AGENT,
+    'X-YouTube-Client-Name': YTTV_CLIENT_NAME_ID,
+    'X-YouTube-Client-Version': YTTV_CLIENT_VERSION,
+  };
+}
+
+function parseBrowseResponse(text, contentType, status, url) {
+  if (looksLikeHtml(text) || /text\/html/i.test(contentType || '')) {
+    throw cloudflareBlockError();
+  }
+  let data;
   try {
-    response = await yt.session.http.fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Origin: 'https://tv.youtube.com',
-        Referer: 'https://tv.youtube.com/',
-        'User-Agent': YTTV_USER_AGENT,
-      },
-      body: JSON.stringify({ context: yt.session.context }),
-      signal: AbortSignal.timeout(45000),
-    });
-  } catch (e) {
-    const msg = errorMessageFrom(e);
-    if (/401|403|invalid credentials/i.test(msg)) {
+    data = JSON.parse(text);
+  } catch {
+    if (looksLikeHtml(text)) throw cloudflareBlockError();
+    throw new Error('YouTube TV returned an invalid guide response.');
+  }
+  if (status === 401 || status === 403) {
+    const err = new Error('YouTube TV session expired. Disconnect and reconnect in Connections.');
+    err.needsReconnect = true;
+    throw err;
+  }
+  if (!status || status >= 400) {
+    const apiMsg = data?.error?.message ? String(data.error.message) : `HTTP ${status}`;
+    if (/auth|credential|expired|permission|sign in/i.test(apiMsg)) {
       const err = new Error('YouTube TV session expired. Disconnect and reconnect in Connections.');
       err.needsReconnect = true;
       throw err;
     }
-    throw new Error(`YouTube TV guide failed: ${msg.slice(0, 240)}`);
+    if (looksLikeHtml(apiMsg)) throw cloudflareBlockError();
+    throw new Error(`YouTube TV guide failed: ${sanitizeYoutubeTvErrorText(apiMsg)}`);
   }
-
-  let data;
-  try {
-    data = await response.json();
-  } catch {
-    throw new Error('YouTube TV returned an invalid guide response.');
-  }
-
   if (data?.error?.message) {
-    const err = new Error(`YouTube TV guide error: ${String(data.error.message).slice(0, 200)}`);
+    const err = new Error(
+      `YouTube TV guide error: ${sanitizeYoutubeTvErrorText(String(data.error.message))}`,
+    );
     if (/auth|credential|expired|permission/i.test(data.error.message)) err.needsReconnect = true;
     throw err;
   }
-
   return data;
+}
+
+async function postUnpluggedBrowse(endpoint, body, accessToken, fetchImpl = fetch) {
+  const url = new URL(endpoint.url);
+  url.searchParams.set('prettyPrint', 'false');
+  url.searchParams.set('alt', 'json');
+  const response = await fetchImpl(url, {
+    method: 'POST',
+    headers: browseHeaders(endpoint, accessToken),
+    body,
+    signal: AbortSignal.timeout(45000),
+  });
+  const contentType = response.headers?.get?.('content-type') || '';
+  const text = await response.text();
+  return parseBrowseResponse(text, contentType, response.status, url.toString());
+}
+
+async function fetchUnpluggedBrowse(yt, userId, { fetchImpl } = {}) {
+  const accessToken = await ensureFreshAccessToken(yt, userId);
+  const body = browseRequestBody(yt);
+  const doFetch = fetchImpl || fetch;
+  let lastErr;
+
+  for (const endpoint of UNPLUGGED_BROWSE_ENDPOINTS) {
+    try {
+      return await postUnpluggedBrowse(endpoint, body, accessToken, doFetch);
+    } catch (e) {
+      lastErr = e;
+      if (e?.blockedByCloudflare) continue;
+      if (e?.needsReconnect) throw e;
+    }
+  }
+
+  if (lastErr) throw lastErr;
+  throw cloudflareBlockError();
 }
 
 export async function createAuthenticatedClient(userId) {
@@ -310,7 +379,7 @@ export async function disconnect(userId) {
   }
 }
 
-export async function listChannels(userId) {
+export async function listChannels(userId, opts = {}) {
   const stored = loadCredentials(userId);
   if (!stored?.credentials?.access_token) {
     const err = new Error('Connect YouTube TV in Connections first.');
@@ -324,7 +393,7 @@ export async function listChannels(userId) {
   }
 
   const yt = await createAuthenticatedClient(userId);
-  const browse = await fetchUnpluggedBrowse(yt, userId);
+  const browse = await fetchUnpluggedBrowse(yt, userId, { fetchImpl: opts.fetchImpl });
   const channels = parseChannelsFromBrowse(browse);
   if (!channels.length) {
     throw new Error(
@@ -332,6 +401,26 @@ export async function listChannels(userId) {
     );
   }
   return channels;
+}
+
+/** Execute an Innertube browse from this host (desktop relay). */
+export async function relayInnertubeFetch({ url, method = 'POST', headers = {}, body = '' }) {
+  const target = String(url || '');
+  if (!/^https:\/\/(www\.youtube\.com|tv\.youtube\.com)\//i.test(target)) {
+    throw new Error('Relay URL not allowed.');
+  }
+  const response = await fetch(target, {
+    method,
+    headers,
+    body: method === 'GET' || method === 'HEAD' ? undefined : body,
+    signal: AbortSignal.timeout(45000),
+  });
+  const text = await response.text();
+  return {
+    status: response.status,
+    contentType: response.headers.get('content-type') || '',
+    body: text.slice(0, 4_000_000),
+  };
 }
 
 export async function resolveStream(userId, videoId) {

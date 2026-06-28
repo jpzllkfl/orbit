@@ -1,4 +1,5 @@
 import { orbitApiFetch } from './orbitApi';
+import { sanitizeApiErrorText } from './sanitizeError';
 
 export type YoutubeTvStatus = {
   connected: boolean;
@@ -69,14 +70,14 @@ export async function fetchYoutubeTvChannels(): Promise<YoutubeTvChannel[]> {
     j = text ? (JSON.parse(text) as typeof j) : {};
   } catch {
     throw new YoutubeTvApiError(
-      text.trim().slice(0, 240) || `Could not load channels (${res.status})`,
+      sanitizeApiErrorText(text, `Could not load channels (${res.status})`),
       res.status,
       false,
     );
   }
   if (!res.ok) {
     throw new YoutubeTvApiError(
-      j.error || text.trim().slice(0, 240) || `Could not load channels (${res.status})`,
+      sanitizeApiErrorText(j.error || text, `Could not load channels (${res.status})`),
       res.status,
       Boolean(j.needsReconnect),
     );
