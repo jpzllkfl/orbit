@@ -10,12 +10,21 @@ export type YoutubeTvStatus = {
 export class YoutubeTvApiError extends Error {
   needsReconnect: boolean;
   status: number;
+  networkFailure: boolean;
+  blockedByCloudflare: boolean;
 
-  constructor(message: string, status: number, needsReconnect = false) {
+  constructor(
+    message: string,
+    status: number,
+    needsReconnect = false,
+    opts: { networkFailure?: boolean; blockedByCloudflare?: boolean } = {},
+  ) {
     super(message);
     this.name = 'YoutubeTvApiError';
     this.status = status;
     this.needsReconnect = needsReconnect;
+    this.networkFailure = Boolean(opts.networkFailure);
+    this.blockedByCloudflare = Boolean(opts.blockedByCloudflare);
   }
 }
 
@@ -63,9 +72,29 @@ export async function disconnectYoutubeTv(): Promise<void> {
 }
 
 export async function fetchYoutubeTvChannels(): Promise<YoutubeTvChannel[]> {
-  const res = await orbitApiFetch('/api/youtube-tv/channels');
+  let res: Response;
+  try {
+    res = await orbitApiFetch('/api/youtube-tv/channels');
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : '';
+    const network =
+      e instanceof TypeError || /failed to fetch|networkerror|load failed/i.test(msg);
+    throw new YoutubeTvApiError(
+      network
+        ? 'Could not reach the Orbit server. Check your connection and try again.'
+        : sanitizeApiErrorText(msg, 'Could not load channels.'),
+      0,
+      false,
+      { networkFailure: network },
+    );
+  }
   const text = await res.text().catch(() => '');
-  let j: { channels?: YoutubeTvChannel[]; error?: string; needsReconnect?: boolean } = {};
+  let j: {
+    channels?: YoutubeTvChannel[];
+    error?: string;
+    needsReconnect?: boolean;
+    blockedByCloudflare?: boolean;
+  } = {};
   try {
     j = text ? (JSON.parse(text) as typeof j) : {};
   } catch {
@@ -80,6 +109,7 @@ export async function fetchYoutubeTvChannels(): Promise<YoutubeTvChannel[]> {
       sanitizeApiErrorText(j.error || text, `Could not load channels (${res.status})`),
       res.status,
       Boolean(j.needsReconnect),
+      { blockedByCloudflare: Boolean(j.blockedByCloudflare) },
     );
   }
   return j.channels || [];

@@ -75,6 +75,13 @@ export function createApp() {
   app.use('/api/art', createArtRouter());
   app.use('/api/auth', createAuthRouter());
 
+  // Never drop API connections — always return JSON on unexpected errors.
+  app.use('/api', (err, req, res, _next) => {
+    if (res.headersSent) return;
+    console.error('[orbit-api]', req.method, req.path, err);
+    res.status(500).json({ error: err?.message || 'Internal server error.' });
+  });
+
   if (hasDist) {
     app.use(express.static(DIST, { index: false, maxAge: '1h' }));
     app.get('*', (_req, res) => {

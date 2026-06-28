@@ -233,7 +233,7 @@ async function postUnpluggedBrowse(endpoint, body, accessToken, fetchImpl = fetc
     method: 'POST',
     headers: browseHeaders(endpoint, accessToken),
     body,
-    signal: AbortSignal.timeout(45000),
+    signal: AbortSignal.timeout(15000),
   });
   const contentType = response.headers?.get?.('content-type') || '';
   const text = await response.text();
@@ -413,7 +413,7 @@ export async function relayInnertubeFetch({ url, method = 'POST', headers = {}, 
     method,
     headers,
     body: method === 'GET' || method === 'HEAD' ? undefined : body,
-    signal: AbortSignal.timeout(45000),
+    signal: AbortSignal.timeout(15000),
   });
   const text = await response.text();
   return {

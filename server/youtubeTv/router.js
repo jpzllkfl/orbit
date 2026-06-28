@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { pipeline } from 'stream/promises';
 import { Readable } from 'stream';
 import { resolveSession } from '../auth-store.js';
-import { resolveRelayOrigin } from '../media/relay.js';
+import { isPrivateLanOrigin, resolveRelayOrigin } from '../media/relay.js';
 import {
   connectionStatus,
   clearCredentials,
@@ -29,21 +29,47 @@ function respondYoutubeTvError(res, err, fallback) {
   });
 }
 
+const CHANNELS_DEADLINE_MS = 25000;
+const RELAY_TIMEOUT_MS = 10000;
+
+function withDeadline(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label} timed out. Try again or use the Orbit desktop app.`)),
+      ms,
+    );
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 function desktopRelayFetch(req) {
   const origin = resolveRelayOrigin(req);
   if (!origin) return null;
+  if (isPrivateLanOrigin(origin)) return null;
   return async (url, init = {}) => {
-    const relayRes = await fetch(`${origin}/api/youtube-tv/innertube-relay`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url: url.toString(),
-        method: init.method || 'POST',
-        headers: init.headers || {},
-        body: typeof init.body === 'string' ? init.body : '',
-      }),
-      signal: AbortSignal.timeout(60000),
-    });
+    let relayRes;
+    try {
+      relayRes = await fetch(`${origin}/api/youtube-tv/innertube-relay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: url.toString(),
+          method: init.method || 'POST',
+          headers: init.headers || {},
+          body: typeof init.body === 'string' ? init.body : '',
+        }),
+        signal: AbortSignal.timeout(RELAY_TIMEOUT_MS),
+      });
+    } catch (e) {
+      const err = new Error(
+        e?.name === 'TimeoutError' || e?.name === 'AbortError'
+          ? 'Desktop Orbit did not respond in time. Open Orbit on your home PC and try again.'
+          : 'Could not reach your desktop Orbit app. Open Orbit on your home PC (same account) and tap Sync now.',
+      );
+      err.relayUnreachable = true;
+      throw err;
+    }
     const payload = await relayRes.json().catch(() => ({}));
     if (!relayRes.ok) {
       throw new Error(payload.error || 'Desktop relay failed.');
@@ -132,17 +158,21 @@ export function createYoutubeTvRouter() {
 
   router.get('/channels', requireAuth, async (req, res) => {
     try {
-      let channels;
-      try {
-        channels = await listChannels(req.orbitUser.id);
-      } catch (e) {
-        const relayFetch = desktopRelayFetch(req);
-        if (e?.blockedByCloudflare && relayFetch) {
-          channels = await listChannels(req.orbitUser.id, { fetchImpl: relayFetch });
-        } else {
-          throw e;
-        }
-      }
+      const channels = await withDeadline(
+        (async () => {
+          try {
+            return await listChannels(req.orbitUser.id);
+          } catch (e) {
+            const relayFetch = desktopRelayFetch(req);
+            if (e?.blockedByCloudflare && relayFetch) {
+              return await listChannels(req.orbitUser.id, { fetchImpl: relayFetch });
+            }
+            throw e;
+          }
+        })(),
+        CHANNELS_DEADLINE_MS,
+        'Channel load',
+      );
       res.json({ channels });
     } catch (e) {
       if (e?.blockedByCloudflare && !desktopRelayFetch(req)) {

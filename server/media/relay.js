@@ -16,6 +16,24 @@ function normalizeOrigin(url) {
     .replace(/\/+$/, '');
 }
 
+/** True when the synced desktop origin is a home LAN address the cloud server cannot dial. */
+export function isPrivateLanOrigin(origin) {
+  try {
+    const h = new URL(origin).hostname.toLowerCase();
+    return (
+      h === 'localhost' ||
+      h === '127.0.0.1' ||
+      h === '0.0.0.0' ||
+      h.endsWith('.local') ||
+      h.startsWith('192.168.') ||
+      h.startsWith('10.') ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(h)
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Desktop Plex-PC media origin from account sync (`orbit.desktop.media.v1`). */
 export function resolveRelayOrigin(req) {
   const user = resolveSession(bearerOrQueryToken(req));

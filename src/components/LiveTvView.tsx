@@ -64,7 +64,19 @@ export function LiveTvView({ onOpenConnections }: { onOpenConnections?: () => vo
         setYttvConnected(false);
         setYttvChannels([]);
       }
-      setError(sanitizeApiErrorText(e instanceof Error ? e.message : 'Could not load channels.'));
+      if (e instanceof YoutubeTvApiError) {
+        if (e.networkFailure) {
+          setError('Network error — could not reach Orbit. Check your connection and try again.');
+        } else if (e.blockedByCloudflare) {
+          setError(
+            'YouTube TV blocked the server. Open Orbit on your desktop (same account) to load channels from your home network.',
+          );
+        } else {
+          setError(sanitizeApiErrorText(e.message, 'Could not load channels.'));
+        }
+      } else {
+        setError(sanitizeApiErrorText(e instanceof Error ? e.message : 'Could not load channels.'));
+      }
     } finally {
       setLoading(false);
     }
