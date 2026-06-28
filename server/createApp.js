@@ -9,6 +9,7 @@ import { mediaStats } from './media/db.js';
 import { createArtRouter } from './art-router.js';
 import { createPlexRouter } from './plex-proxy.js';
 import { createLiveTvRouter } from './liveTv/router.js';
+import { createYoutubeTvRouter } from './youtubeTv/router.js';
 import { createTmdbRouter } from './tmdb-router.js';
 import { isTmdbConfigured } from './tmdb-config.js';
 
@@ -29,7 +30,7 @@ export function createApp() {
     if (origin) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Vary', 'Origin');
-      res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Orbit-Tmdb-Key');
+      res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Orbit-Tmdb-Key, X-Orbit-YTTV-Cookie');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     }
     if (req.method === 'OPTIONS') return res.sendStatus(204);
@@ -68,6 +69,7 @@ export function createApp() {
 
   app.use('/api/plex', createPlexRouter());
   app.use('/api/livetv', createLiveTvRouter());
+  app.use('/api/youtube-tv', createYoutubeTvRouter());
   app.use('/api/media', createMediaRouter());
   app.use('/api/tmdb', createTmdbRouter());
   app.use('/api/art', createArtRouter());

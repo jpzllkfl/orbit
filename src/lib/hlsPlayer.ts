@@ -1,15 +1,21 @@
 import Hls from 'hls.js';
 import { Plex } from './index';
 
-/** OMS / IPTV routes — must not go through the Plex media proxy. */
+/** OMS / YouTube TV / IPTV routes — must not go through the Plex media proxy. */
 function isOrbitMediaUrl(url: string): boolean {
   if (!url) return false;
-  if (url.startsWith('/api/media/') || url.startsWith('/api/livetv/')) return true;
+  if (url.startsWith('/api/media/') || url.startsWith('/api/livetv/') || url.startsWith('/api/youtube-tv/')) {
+    return true;
+  }
   try {
     const u = /^https?:\/\//i.test(url) ? new URL(url) : new URL(url, window.location.origin);
-    return u.pathname.startsWith('/api/media/') || u.pathname.startsWith('/api/livetv/');
+    return (
+      u.pathname.startsWith('/api/media/') ||
+      u.pathname.startsWith('/api/livetv/') ||
+      u.pathname.startsWith('/api/youtube-tv/')
+    );
   } catch {
-    return url.includes('/api/media/') || url.includes('/api/livetv/');
+    return url.includes('/api/media/') || url.includes('/api/livetv/') || url.includes('/api/youtube-tv/');
   }
 }
 

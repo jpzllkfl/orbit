@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plex } from '../lib';
-import { fetchM3uPlaylist, iptvPlaybackUrl, type IptvChannel } from '../lib/iptv';
-import { loadLiveTvConfig, resolvedIptvPlaylistUrl, type LiveTvSource } from '../lib/liveTvConfig';
+import { OrbitAccount, Plex } from '../lib';
+import { loadLiveTvConfig, type LiveTvSource } from '../lib/liveTvConfig';
 import { listPlexLiveChannels, tunePlexLiveChannel, type PlexLiveChannel } from '../lib/plexLiveTv';
+import {
+  fetchYoutubeTvChannels,
+  fetchYoutubeTvStatus,
+  resolveYoutubeTvStream,
+  type YoutubeTvChannel,
+} from '../lib/youtubeTv';
 import { LiveTvPlayer } from './LiveTvPlayer';
 import { Icons } from './icons';
 
@@ -13,68 +18,95 @@ export function LiveTvView({ onOpenConnections }: { onOpenConnections?: () => vo
   const [source, setSource] = useState<LiveTvSource>(cfg.source);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [yttvConnected, setYttvConnected] = useState(false);
+  const [yttvChannels, setYttvChannels] = useState<YoutubeTvChannel[]>([]);
   const [plexChannels, setPlexChannels] = useState<PlexLiveChannel[]>([]);
-  const [iptvChannels, setIptvChannels] = useState<IptvChannel[]>([]);
   const [group, setGroup] = useState<string>('All');
   const [playing, setPlaying] = useState<Playing | null>(null);
   const [tuning, setTuning] = useState<string | null>(null);
 
   const plexAvailable = Plex.connected;
-  const iptvUrl = resolvedIptvPlaylistUrl(cfg);
+  const signedIn = OrbitAccount.signedIn;
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const active = source === 'plex' && plexAvailable ? 'plex' : 'iptv';
-      if (active === 'plex') {
-        const ch = await listPlexLiveChannels();
-        if (!ch.length) {
-          setError(
-            'No Plex Live TV channels found. Set up Live TV & DVR in Plex (ErsatzTV/xTeVe tuner), or switch to IPTV in Connections.',
-          );
+      if (source === 'youtubetv') {
+        if (!signedIn) {
+          setError('Sign in to your Orbit account, then connect YouTube TV in Connections.');
+          return;
         }
-        setPlexChannels(ch);
-        setIptvChannels([]);
-      } else {
-        if (!iptvUrl) {
-          setError('Add your ErsatzTV URL or M3U playlist in Connections → Live TV.');
-          setIptvChannels([]);
-        } else {
-          const ch = await fetchM3uPlaylist(iptvUrl);
-          setIptvChannels(ch);
-          setPlexChannels([]);
+        const st = await fetchYoutubeTvStatus();
+        setYttvConnected(st.connected);
+        if (!st.connected) {
+          setError('Connect YouTube TV in Connections to load your live channels.');
+          setYttvChannels([]);
+          return;
         }
+        const ch = await fetchYoutubeTvChannels();
+        setYttvChannels(ch);
+        setPlexChannels([]);
+        return;
       }
+      if (!plexAvailable) {
+        setError('Connect Plex with Live TV & DVR, or use YouTube TV.');
+        return;
+      }
+      const ch = await listPlexLiveChannels();
+      if (!ch.length) setError('No Plex Live TV channels found.');
+      setPlexChannels(ch);
+      setYttvChannels([]);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load channels.');
     } finally {
       setLoading(false);
     }
-  }, [source, plexAvailable, iptvUrl]);
+  }, [source, signedIn, plexAvailable]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const groups = useMemo(() => {
-    const ch = source === 'plex' && plexAvailable ? plexChannels : iptvChannels;
-    const set = new Set<string>();
-    for (const c of ch) {
-      const g = ('group' in c && c.group) || 'Channels';
-      set.add(g);
-    }
-    return ['All', ...Array.from(set).sort()];
-  }, [source, plexAvailable, plexChannels, iptvChannels]);
-
   const visible = useMemo(() => {
-    const list =
-      source === 'plex' && plexAvailable
-        ? plexChannels
-        : iptvChannels.map((c) => ({ id: c.id, title: c.name, thumb: c.logo, group: c.group }));
-    if (group === 'All') return list;
-    return list.filter((c) => (c.group || 'Channels') === group);
-  }, [source, plexAvailable, plexChannels, iptvChannels, group]);
+    if (source === 'youtubetv') {
+      return yttvChannels.map((c) => ({
+        id: c.id,
+        title: c.name,
+        thumb: c.logo,
+        group: c.group || 'YouTube TV',
+        videoId: c.videoId,
+      }));
+    }
+    return plexChannels.map((c) => ({
+      id: c.id,
+      title: c.title,
+      thumb: c.thumb,
+      group: c.group || 'Plex',
+      videoId: c.id,
+    }));
+  }, [source, yttvChannels, plexChannels]);
+
+  const groups = useMemo(() => {
+    const set = new Set(visible.map((c) => c.group || 'Channels'));
+    return ['All', ...Array.from(set).sort()];
+  }, [visible]);
+
+  const filtered =
+    group === 'All' ? visible : visible.filter((c) => (c.group || 'Channels') === group);
+
+  async function playYoutubeTv(ch: YoutubeTvChannel) {
+    setTuning(ch.videoId);
+    setError(null);
+    try {
+      const { url, title } = await resolveYoutubeTvStream(ch.videoId);
+      setPlaying({ title, streamUrl: url });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Playback failed.');
+    } finally {
+      setTuning(null);
+    }
+  }
 
   async function playPlex(ch: PlexLiveChannel) {
     setTuning(ch.id);
@@ -89,10 +121,6 @@ export function LiveTvView({ onOpenConnections }: { onOpenConnections?: () => vo
     }
   }
 
-  function playIptv(ch: IptvChannel) {
-    setPlaying({ title: ch.name, streamUrl: iptvPlaybackUrl(ch.url) });
-  }
-
   return (
     <div className="livetv rise">
       <div className="livetv-head">
@@ -100,23 +128,29 @@ export function LiveTvView({ onOpenConnections }: { onOpenConnections?: () => vo
           <div className="conns-ey">Live TV</div>
           <h2 className="disp">Channels</h2>
           <p className="conns-sub" style={{ marginTop: 8, maxWidth: 560 }}>
-            YouTube TV plays here when bridged through Plex Live TV or ErsatzTV — not via a direct Google sign-in.
+            Your YouTube TV subscription, integrated directly in Orbit.
           </p>
         </div>
-        {plexAvailable && (
-          <div className="livetv-source-toggle">
+        <div className="livetv-source-toggle">
+          <button type="button" className={source === 'youtubetv' ? 'on' : ''} onClick={() => setSource('youtubetv')}>
+            YouTube TV
+          </button>
+          {plexAvailable && (
             <button type="button" className={source === 'plex' ? 'on' : ''} onClick={() => setSource('plex')}>
               Plex
             </button>
-            <button type="button" className={source === 'iptv' ? 'on' : ''} onClick={() => setSource('iptv')}>
-              IPTV
-            </button>
-          </div>
-        )}
+          )}
+        </div>
         <button type="button" className="conns-btn sm" onClick={() => void load()}>
           Refresh
         </button>
       </div>
+
+      {source === 'youtubetv' && yttvConnected && (
+        <div className="livetv-now">
+          <span className="livetv-live-dot" /> YouTube TV connected
+        </div>
+      )}
 
       {groups.length > 2 && (
         <div className="livetv-source-toggle" style={{ marginBottom: 18 }}>
@@ -143,17 +177,18 @@ export function LiveTvView({ onOpenConnections }: { onOpenConnections?: () => vo
 
       {!loading && !error && (
         <div className="livetv-grid">
-          {visible.map((ch) => (
+          {filtered.map((ch) => (
             <button
               key={ch.id}
               type="button"
               className={'livetv-ch' + (tuning === ch.id ? ' tuning' : '') + (playing?.title === ch.title ? ' on' : '')}
               onClick={() => {
-                if (source === 'plex' && plexAvailable) {
-                  void playPlex(ch as PlexLiveChannel);
+                if (source === 'youtubetv') {
+                  const hit = yttvChannels.find((c) => c.id === ch.id);
+                  if (hit) void playYoutubeTv(hit);
                 } else {
-                  const hit = iptvChannels.find((c) => c.id === ch.id);
-                  if (hit) playIptv(hit);
+                  const hit = plexChannels.find((c) => c.id === ch.id);
+                  if (hit) void playPlex(hit);
                 }
               }}
             >

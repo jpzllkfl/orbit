@@ -19,6 +19,7 @@ const SYNC_KEY_PREFIXES = [
   'orbit.server.home.',
   'orbit.desktop.media.',
   'orbit.livetv.',
+  'orbit.youtubetv.',
 ];
 
 const SKIP_KEYS = new Set(['orbit.session.v1', 'orbit.art.cache.v1']);
@@ -71,8 +72,7 @@ const APPLY_FIRST = [
   'orbit.conn.v1',
   'orbit.plex.conn',
   'orbit.tmdb.v1',
-  'orbit.oms.libraries.v1',
-  'orbit.desktop.media.v1',
+  'orbit.youtubetv.v1',
 ];
 
 /** Drop embedded base64 art — it balloons sync size and can exceed localStorage quota. */

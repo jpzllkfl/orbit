@@ -1,5 +1,3 @@
-import { loadLiveTvConfig, resolvedIptvPlaylistUrl } from './liveTvConfig';
-
 export type IptvChannel = {
   id: string;
   name: string;
@@ -61,10 +59,9 @@ export async function fetchM3uPlaylist(url: string): Promise<IptvChannel[]> {
   return channels;
 }
 
-export async function loadIptvChannels(cfg = loadLiveTvConfig()): Promise<IptvChannel[]> {
-  const url = resolvedIptvPlaylistUrl(cfg);
-  if (!url) throw new Error('Add an IPTV or ErsatzTV URL in Connections');
-  return fetchM3uPlaylist(url);
+export async function loadIptvChannels(playlistUrl: string): Promise<IptvChannel[]> {
+  if (!playlistUrl?.trim()) throw new Error('Add a custom M3U playlist URL.');
+  return fetchM3uPlaylist(playlistUrl.trim());
 }
 
 /** Rewrite channel stream URL through Orbit when cross-origin. */

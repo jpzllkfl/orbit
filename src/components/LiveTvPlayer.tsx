@@ -53,7 +53,7 @@ export function LiveTvPlayer({
     v.addEventListener('error', onErr);
     const stall = window.setTimeout(() => {
       if (v.currentTime < 0.5 && v.readyState < 2) {
-        setError('Channel timed out. Check ErsatzTV or Plex Live TV on your network.');
+        setError('Channel timed out. Check your YouTube TV connection in Connections.');
         setWaiting(false);
       }
     }, 25000);

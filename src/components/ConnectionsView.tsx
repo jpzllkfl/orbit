@@ -2,11 +2,16 @@ import { useEffect, useState } from 'react';
 import { Conn, Lib, OT, OrbitAccount, Plex } from '../lib';
 import { isDesktopApp } from '../lib/isDesktop';
 import {
-  ersatzM3uUrl,
   loadLiveTvConfig,
   saveLiveTvConfig,
   type LiveTvSource,
 } from '../lib/liveTvConfig';
+import {
+  disconnectYoutubeTv,
+  fetchYoutubeTvStatus,
+  pollYoutubeTvConnect,
+  startYoutubeTvConnect,
+} from '../lib/youtubeTv';
 import { loadSettings, patchSettings } from '../lib/settings';
 import { plexMetadataOnly } from '../lib/plexMetadataMode';
 import { getHomeServer, isUsingRemoteHome, setHomeServer } from '../lib/orbitServer';
@@ -60,8 +65,10 @@ export function ConnectionsView({
   const [updateBusy, setUpdateBusy] = useState(false);
   const [liveTvCfg, setLiveTvCfg] = useState(loadLiveTvConfig);
   const [liveSource, setLiveSource] = useState<LiveTvSource>(() => liveTvCfg.source);
-  const [ersatzOrigin, setErsatzOrigin] = useState(() => liveTvCfg.ersatzOrigin);
-  const [iptvUrl, setIptvUrl] = useState(() => liveTvCfg.iptvUrl);
+  const [yttvConnected, setYttvConnected] = useState(false);
+  const [yttvBusy, setYttvBusy] = useState(false);
+  const [yttvMsg, setYttvMsg] = useState<string | null>(null);
+  const [yttvPending, setYttvPending] = useState<{ url: string; code: string } | null>(null);
   const syncedLabel = conn?.syncedAt
     ? new Date(conn.syncedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
     : 'not yet';
@@ -85,10 +92,25 @@ export function ConnectionsView({
   }
 
   useEffect(() => {
+    if (!OrbitAccount.signedIn) return;
+    void fetchYoutubeTvStatus().then((s) => setYttvConnected(s.connected));
+  }, [orbitUser]);
+
+  useEffect(() => {
     setTmdbKey(Lib.key || conn?.tmdbKey || '');
   }, []);
 
   useEffect(() => OrbitAccount.onChange(() => setOrbitUser(OrbitAccount.user)), []);
+
+  useEffect(() => {
+    if (!OrbitAccount.signedIn) {
+      setYttvConnected(false);
+      return;
+    }
+    void fetchYoutubeTvStatus()
+      .then((st) => setYttvConnected(st.connected))
+      .catch(() => setYttvConnected(false));
+  }, [orbitUser?.id]);
 
   useEffect(() => {
     if (!isDesktopApp() || !window.orbitNative?.getInfo) return;
@@ -400,82 +422,149 @@ export function ConnectionsView({
 
         <div className="conns-card wide">
           <div className="conns-card-h">
-            <span className="conns-pill">{ic.tv({})}Live TV</span>
-            <span className={'conns-state' + (Plex.connected || ersatzOrigin.trim() || iptvUrl.trim() ? ' on' : '')}>
-              {liveSource === 'plex' && Plex.connected ? 'Plex' : liveSource === 'iptv' ? 'IPTV' : 'Not configured'}
+            <span className="conns-pill">{ic.tv({})}YouTube TV</span>
+            <span className={'conns-state' + (yttvConnected ? ' on' : '')}>
+              {yttvConnected ? 'Connected' : 'Not connected'}
             </span>
           </div>
           <p className="conns-sub">
-            For YouTube TV: set up channels in Plex Live TV (via ErsatzTV, xTeVe, or HDHomeRun tuner) or point Orbit
-            at your ErsatzTV M3U playlist.
+            Sign in with your Google account that has an active YouTube TV subscription. Orbit loads your live
+            channel lineup and plays streams directly — no ErsatzTV or Plex tuner required.
           </p>
-          <div className="livetv-conns-source" style={{ marginTop: 12 }}>
-            <span className="conns-sub" style={{ display: 'block', marginBottom: 8 }}>
-              Source
-            </span>
-            <div className="livetv-source-toggle">
-              <button
-                type="button"
-                className={liveSource === 'plex' ? 'on' : ''}
-                disabled={!Plex.connected}
-                onClick={() => {
-                  setLiveSource('plex');
-                  setLiveTvCfg(saveLiveTvConfig({ source: 'plex' }));
-                }}
-              >
-                Plex Live TV
-              </button>
-              <button
-                type="button"
-                className={liveSource === 'iptv' ? 'on' : ''}
-                onClick={() => {
-                  setLiveSource('iptv');
-                  setLiveTvCfg(saveLiveTvConfig({ source: 'iptv' }));
-                }}
-              >
-                IPTV / ErsatzTV
-              </button>
-            </div>
-          </div>
-          <label className="oms-path" style={{ marginTop: 14, display: 'block' }}>
-            ErsatzTV server
-            <input
-              value={ersatzOrigin}
-              onChange={(e) => setErsatzOrigin(e.target.value)}
-              placeholder="http://192.168.1.177:8409"
-              spellCheck={false}
-            />
-          </label>
-          {ersatzOrigin.trim() && (
-            <p className="conns-sub" style={{ marginTop: 6 }}>
-              Playlist: {ersatzM3uUrl(ersatzOrigin)}
+          {yttvMsg && (
+            <p className="conns-sub oms-msg" style={{ marginTop: 8 }}>
+              {yttvMsg}
             </p>
           )}
-          <label className="oms-path" style={{ marginTop: 12, display: 'block' }}>
-            Custom M3U URL (optional)
-            <input
-              value={iptvUrl}
-              onChange={(e) => setIptvUrl(e.target.value)}
-              placeholder="http://host:8409/iptv/channels.m3u?mode=segmenter"
-              spellCheck={false}
-            />
-          </label>
-          <div className="conns-actions" style={{ marginTop: 10 }}>
-            <button
-              className="conns-btn primary sm"
-              onClick={() => {
-                const next = saveLiveTvConfig({
-                  source: liveSource,
-                  ersatzOrigin: ersatzOrigin.trim(),
-                  iptvUrl: iptvUrl.trim(),
-                });
-                setLiveTvCfg(next);
-                onBump?.();
-              }}
-            >
-              Save Live TV
-            </button>
+          <div className="conns-actions" style={{ marginTop: 12 }}>
+            {!yttvConnected ? (
+              <button
+                className="conns-btn primary sm"
+                disabled={yttvBusy || !orbitUser}
+                onClick={async () => {
+                  if (!orbitUser) {
+                    setYttvMsg('Sign in to your Orbit account first.');
+                    return;
+                  }
+                  setYttvBusy(true);
+                  setYttvMsg(null);
+                  setYttvPending(null);
+                  try {
+                    const start = await startYoutubeTvConnect();
+                    if (start.status === 'connected' || start.already) {
+                      setYttvConnected(true);
+                      setYttvMsg('YouTube TV connected. Open Live TV in the sidebar.');
+                      saveLiveTvConfig({ source: 'youtubetv' });
+                      setLiveSource('youtubetv');
+                      return;
+                    }
+                    if (start.verificationUrl && start.userCode) {
+                      setYttvPending({ url: start.verificationUrl, code: start.userCode });
+                      setYttvMsg('Enter the code at the Google page, then wait…');
+                      const deadline = Date.now() + 180000;
+                      while (Date.now() < deadline) {
+                        await new Promise((r) => window.setTimeout(r, 2500));
+                        const st = await pollYoutubeTvConnect();
+                        if (st.status === 'connected') {
+                          setYttvConnected(true);
+                          setYttvPending(null);
+                          setYttvMsg('YouTube TV connected. Open Live TV in the sidebar.');
+                          saveLiveTvConfig({ source: 'youtubetv' });
+                          setLiveSource('youtubetv');
+                          if (OrbitAccount.signedIn) await OrbitAccount.pushSyncNow();
+                          onBump?.();
+                          return;
+                        }
+                        if (st.status === 'error') throw new Error(st.error || 'Sign-in failed');
+                      }
+                      throw new Error('Sign-in timed out. Try again.');
+                    }
+                  } catch (e) {
+                    setYttvMsg(e instanceof Error ? e.message : 'Connect failed');
+                  } finally {
+                    setYttvBusy(false);
+                  }
+                }}
+              >
+                {yttvBusy ? 'Waiting for Google…' : 'Connect YouTube TV'}
+              </button>
+            ) : (
+              <button
+                className="conns-btn sm"
+                disabled={yttvBusy}
+                onClick={async () => {
+                  setYttvBusy(true);
+                  try {
+                    await disconnectYoutubeTv();
+                    setYttvConnected(false);
+                    setYttvPending(null);
+                    setYttvMsg('Disconnected.');
+                    if (OrbitAccount.signedIn) await OrbitAccount.pushSyncNow();
+                    onBump?.();
+                  } finally {
+                    setYttvBusy(false);
+                  }
+                }}
+              >
+                Disconnect
+              </button>
+            )}
           </div>
+          {yttvPending && (
+            <div className="yttv-pending" style={{ marginTop: 14 }}>
+              <p className="conns-sub">
+                Go to{' '}
+                <a href={yttvPending.url} target="_blank" rel="noreferrer">
+                  {yttvPending.url}
+                </a>{' '}
+                and enter code:
+              </p>
+              <p className="yttv-code">{yttvPending.code}</p>
+            </div>
+          )}
+
+          <details className="conns-advanced" style={{ marginTop: 16 }}>
+            <summary className="conns-sub" style={{ cursor: 'pointer' }}>
+              Advanced: Plex Live TV fallback
+            </summary>
+            <div className="livetv-conns-source" style={{ marginTop: 12 }}>
+              <div className="livetv-source-toggle">
+                <button
+                  type="button"
+                  className={liveSource === 'youtubetv' ? 'on' : ''}
+                  onClick={() => {
+                    setLiveSource('youtubetv');
+                    setLiveTvCfg(saveLiveTvConfig({ source: 'youtubetv' }));
+                  }}
+                >
+                  YouTube TV
+                </button>
+                <button
+                  type="button"
+                  className={liveSource === 'plex' ? 'on' : ''}
+                  disabled={!Plex.connected}
+                  onClick={() => {
+                    setLiveSource('plex');
+                    setLiveTvCfg(saveLiveTvConfig({ source: 'plex' }));
+                  }}
+                >
+                  Plex Live TV
+                </button>
+              </div>
+            </div>
+            <div className="conns-actions" style={{ marginTop: 10 }}>
+              <button
+                className="conns-btn sm"
+                onClick={() => {
+                  saveLiveTvConfig({ source: liveSource });
+                  onBump?.();
+                  setYttvMsg('Live TV source saved.');
+                }}
+              >
+                Save source preference
+              </button>
+            </div>
+          </details>
         </div>
 
         <div className="conns-card">

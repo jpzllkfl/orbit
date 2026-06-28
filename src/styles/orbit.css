@@ -1966,6 +1966,7 @@ html.orbit-reduce-motion .coll-card { transition: none !important; transform: no
 .livetv-source-toggle button { padding: 8px 14px; border-radius: 9px; font-size: 13px; font-weight: 600; color: var(--muted); transition: .14s; }
 .livetv-source-toggle button.on { background: rgba(86,179,249,.18); color: var(--warm); }
 .livetv-source-toggle button:disabled { opacity: .4; cursor: not-allowed; }
+.yttv-code { font-size: 1.75rem; font-weight: 700; letter-spacing: 0.2em; margin: 8px 0 0; color: var(--warm); }
 @media (max-width: 720px) {
   .ltv { padding: 16px 14px 88px; }
   .ltv-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }

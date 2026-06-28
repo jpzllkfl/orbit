@@ -35,6 +35,9 @@ contextBridge.exposeInMainWorld('orbitNative', {
   pickFolder() {
     return ipcRenderer.invoke('orbit-shell:pick-folder');
   },
+  connectYouTubeTv() {
+    return ipcRenderer.invoke('orbit-yttv:connect');
+  },
   checkForUpdates() {
     return ipcRenderer.invoke('orbit-update:check');
   },

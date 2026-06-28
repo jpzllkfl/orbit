@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, session } = require('electron');
 const os = require('os');
 const path = require('path');
 const http = require('http');
@@ -263,6 +263,54 @@ ipcMain.handle('orbit-shell:pick-folder', async () => {
   });
   if (result.canceled || !result.filePaths?.length) return null;
   return result.filePaths[0];
+});
+
+const YTTV_PARTITION = 'persist:orbit-youtubetv';
+
+function cookiesToNetscape(cookies) {
+  const lines = ['# Netscape HTTP Cookie File', '# Orbit YouTube TV'];
+  for (const c of cookies) {
+    if (!c.name || c.value == null) continue;
+    const domain = c.domain?.startsWith('.') ? c.domain : '.' + (c.domain || 'youtube.com');
+    lines.push(
+      [
+        domain,
+        'TRUE',
+        c.path || '/',
+        c.secure ? 'TRUE' : 'FALSE',
+        c.expirationDate ? Math.floor(c.expirationDate) : 0,
+        c.name,
+        c.value,
+      ].join('\t'),
+    );
+  }
+  return lines.join('\n');
+}
+
+ipcMain.handle('orbit-yttv:connect', async () => {
+  const part = session.fromPartition(YTTV_PARTITION);
+  return new Promise((resolve) => {
+    const win = new BrowserWindow({
+      width: 960,
+      height: 720,
+      title: 'Sign in to YouTube TV',
+      parent: mainWindow || undefined,
+      modal: !!mainWindow,
+      webPreferences: { partition: YTTV_PARTITION, contextIsolation: true, nodeIntegration: false },
+    });
+    win.loadURL('https://tv.youtube.com/');
+    win.on('closed', async () => {
+      try {
+        const cookies = await part.cookies.get({ url: 'https://www.youtube.com' });
+        const yttv = await part.cookies.get({ url: 'https://tv.youtube.com' });
+        const merged = [...cookies, ...yttv];
+        const netscape = cookiesToNetscape(merged);
+        resolve(merged.length ? netscape : null);
+      } catch {
+        resolve(null);
+      }
+    });
+  });
 });
 
 function lanAddresses() {
